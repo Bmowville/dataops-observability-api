@@ -1,10 +1,10 @@
 # DataOps Observability API
 
-A production-style FastAPI service for tracking data pipeline runs, quality checks, and operational status.
+A FastAPI service for tracking data pipeline runs, quality checks, and operational status.
 
-This repo demonstrates Python service engineering: typed FastAPI routes, SQLAlchemy models, Alembic migrations, Pydantic settings, pytest coverage, Docker support, and CI quality gates.
+The service keeps operational metadata for data workflows in a small API surface with typed routes, database migrations, test coverage, Docker support, and CI quality gates.
 
-## What It Demonstrates
+## Service Scope
 
 - FastAPI application structure with versioned API routes
 - SQLAlchemy 2.0 models and session management
