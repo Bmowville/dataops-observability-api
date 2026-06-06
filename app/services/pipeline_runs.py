@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.pipeline import PipelineRun, QualityCheck
 from app.schemas.pipeline import (
     MetricsSummary,
+    PipelineHealthRollup,
     PipelineRunCreate,
     PipelineRunStatus,
     PipelineRunTimelineEvent,
@@ -198,3 +199,49 @@ def get_metrics_summary(db: Session) -> MetricsSummary:
         failed_quality_checks=int(failed_checks),
         warning_quality_checks=int(warning_checks),
     )
+
+
+def get_pipeline_health_rollups(db: Session) -> list[PipelineHealthRollup]:
+    runs = db.scalars(
+        select(PipelineRun)
+        .options(selectinload(PipelineRun.quality_checks))
+        .order_by(
+            PipelineRun.name.asc(),
+            PipelineRun.started_at.desc(),
+            PipelineRun.created_at.desc(),
+        )
+    ).all()
+
+    grouped_runs: dict[str, list[PipelineRun]] = {}
+    for run in runs:
+        grouped_runs.setdefault(run.name, []).append(run)
+
+    rollups = []
+    for name, pipeline_runs in grouped_runs.items():
+        latest_run = max(
+            pipeline_runs,
+            key=lambda run: run.started_at or run.created_at,
+        )
+        checks = [check for run in pipeline_runs for check in run.quality_checks]
+        rollups.append(
+            PipelineHealthRollup(
+                name=name,
+                total_runs=len(pipeline_runs),
+                failed_runs=sum(
+                    1 for run in pipeline_runs if run.status == PipelineRunStatus.failed
+                ),
+                latest_run_id=latest_run.id,
+                latest_status=PipelineRunStatus(latest_run.status),
+                latest_run_at=latest_run.started_at or latest_run.created_at,
+                latest_finished_at=latest_run.finished_at,
+                latest_records_processed=latest_run.records_processed,
+                failed_quality_checks=sum(
+                    1 for check in checks if check.status == QualityCheckStatus.failed
+                ),
+                warning_quality_checks=sum(
+                    1 for check in checks if check.status == QualityCheckStatus.warning
+                ),
+            )
+        )
+
+    return sorted(rollups, key=lambda rollup: rollup.name)

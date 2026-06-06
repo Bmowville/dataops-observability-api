@@ -74,6 +74,7 @@ Seed and inspect local sample data:
 ```powershell
 python scripts/seed_sample_data.py
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/pipeline-runs/latest?name=orders_daily_load"
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/pipelines"
 ```
 
 ## Docker
@@ -98,6 +99,7 @@ The container starts the FastAPI app on port `8000`. Run migrations before produ
 | POST | `/api/v1/pipeline-runs/{run_id}/quality-checks` | Add a quality check to a run |
 | GET | `/api/v1/pipeline-runs/{run_id}/quality-checks` | List quality checks for a run |
 | GET | `/api/v1/metrics/summary` | Operational summary counts |
+| GET | `/api/v1/metrics/pipelines` | Pipeline health rollups grouped by name |
 
 ## Configuration
 
