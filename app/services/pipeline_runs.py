@@ -8,6 +8,7 @@ from app.schemas.pipeline import (
     MetricsSummary,
     PipelineRunCreate,
     PipelineRunStatus,
+    PipelineRunTimelineEvent,
     PipelineRunUpdate,
     QualityCheckCreate,
     QualityCheckStatus,
@@ -53,6 +54,17 @@ def get_pipeline_run(db: Session, run_id: int) -> PipelineRun | None:
         select(PipelineRun)
         .options(selectinload(PipelineRun.quality_checks))
         .where(PipelineRun.id == run_id)
+    )
+    return db.scalar(statement)
+
+
+def get_latest_pipeline_run(db: Session, name: str) -> PipelineRun | None:
+    statement = (
+        select(PipelineRun)
+        .options(selectinload(PipelineRun.quality_checks))
+        .where(PipelineRun.name == name)
+        .order_by(PipelineRun.started_at.desc(), PipelineRun.created_at.desc())
+        .limit(1)
     )
     return db.scalar(statement)
 
@@ -113,6 +125,53 @@ def list_quality_checks(db: Session, run_id: int) -> list[QualityCheck]:
         .order_by(QualityCheck.created_at.desc())
     )
     return list(db.scalars(statement).all())
+
+
+def get_pipeline_run_timeline(run: PipelineRun) -> list[PipelineRunTimelineEvent]:
+    events = [
+        PipelineRunTimelineEvent(
+            timestamp=run.created_at,
+            event_type="run_created",
+            title="Pipeline run created",
+            detail=f"{run.name} from {run.source_system}",
+            status=run.status,
+        )
+    ]
+
+    if run.started_at is not None:
+        events.append(
+            PipelineRunTimelineEvent(
+                timestamp=run.started_at,
+                event_type="run_started",
+                title="Pipeline run started",
+                detail=f"Processed records at start: {run.records_processed}",
+                status=run.status,
+            )
+        )
+
+    for check in run.quality_checks:
+        events.append(
+            PipelineRunTimelineEvent(
+                timestamp=check.created_at,
+                event_type="quality_check",
+                title=check.check_name,
+                detail=check.details,
+                status=check.status,
+            )
+        )
+
+    if run.finished_at is not None:
+        events.append(
+            PipelineRunTimelineEvent(
+                timestamp=run.finished_at,
+                event_type="run_finished",
+                title="Pipeline run finished",
+                detail=run.error_message,
+                status=run.status,
+            )
+        )
+
+    return sorted(events, key=lambda event: event.timestamp)
 
 
 def get_metrics_summary(db: Session) -> MetricsSummary:

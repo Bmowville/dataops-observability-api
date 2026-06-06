@@ -10,6 +10,7 @@ from app.schemas.pipeline import (
     PipelineRunCreate,
     PipelineRunRead,
     PipelineRunStatus,
+    PipelineRunTimelineEvent,
     PipelineRunUpdate,
     QualityCheckCreate,
     QualityCheckRead,
@@ -17,8 +18,10 @@ from app.schemas.pipeline import (
 from app.services.pipeline_runs import (
     create_pipeline_run,
     create_quality_check,
+    get_latest_pipeline_run,
     get_metrics_summary,
     get_pipeline_run,
+    get_pipeline_run_timeline,
     list_pipeline_runs,
     list_quality_checks,
     update_pipeline_run,
@@ -51,9 +54,29 @@ def list_runs(
     return list_pipeline_runs(db, status=status_filter, limit=limit)
 
 
+@router.get("/pipeline-runs/latest", response_model=PipelineRunRead)
+def read_latest_run(
+    name: Annotated[str, Query(min_length=3, max_length=120)],
+    db: Annotated[Session, Depends(get_db)],
+) -> PipelineRun:
+    run = get_latest_pipeline_run(db, name)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline run not found")
+    return run
+
+
 @router.get("/pipeline-runs/{run_id}", response_model=PipelineRunRead)
 def read_run(run_id: int, db: Annotated[Session, Depends(get_db)]) -> PipelineRun:
     return _get_run_or_404(db, run_id)
+
+
+@router.get("/pipeline-runs/{run_id}/timeline", response_model=list[PipelineRunTimelineEvent])
+def read_run_timeline(
+    run_id: int,
+    db: Annotated[Session, Depends(get_db)],
+) -> list[PipelineRunTimelineEvent]:
+    run = _get_run_or_404(db, run_id)
+    return get_pipeline_run_timeline(run)
 
 
 @router.patch("/pipeline-runs/{run_id}", response_model=PipelineRunRead)
