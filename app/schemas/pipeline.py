@@ -1,0 +1,94 @@
+from datetime import datetime
+from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class PipelineRunStatus(StrEnum):
+    queued = "queued"
+    running = "running"
+    succeeded = "succeeded"
+    failed = "failed"
+    canceled = "canceled"
+
+
+class QualityCheckStatus(StrEnum):
+    passed = "passed"
+    warning = "warning"
+    failed = "failed"
+
+
+class QualityCheckSeverity(StrEnum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+    critical = "critical"
+
+
+class HealthResponse(BaseModel):
+    status: str
+    app_name: str
+    environment: str
+    database: str
+
+
+class PipelineRunCreate(BaseModel):
+    name: str = Field(min_length=3, max_length=120)
+    source_system: str = Field(min_length=2, max_length=80)
+    status: PipelineRunStatus = PipelineRunStatus.queued
+    records_processed: int = Field(default=0, ge=0)
+    started_at: datetime | None = None
+
+
+class PipelineRunUpdate(BaseModel):
+    status: PipelineRunStatus | None = None
+    records_processed: int | None = Field(default=None, ge=0)
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    error_message: str | None = Field(default=None, max_length=500)
+
+
+class QualityCheckCreate(BaseModel):
+    check_name: str = Field(min_length=3, max_length=120)
+    status: QualityCheckStatus
+    severity: QualityCheckSeverity = QualityCheckSeverity.medium
+    expected_value: str | None = Field(default=None, max_length=200)
+    observed_value: str | None = Field(default=None, max_length=200)
+    details: str | None = Field(default=None, max_length=1000)
+
+
+class QualityCheckRead(BaseModel):
+    id: int
+    pipeline_run_id: int
+    check_name: str
+    status: QualityCheckStatus
+    severity: QualityCheckSeverity
+    expected_value: str | None
+    observed_value: str | None
+    details: str | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PipelineRunRead(BaseModel):
+    id: int
+    name: str
+    source_system: str
+    status: PipelineRunStatus
+    records_processed: int
+    started_at: datetime | None
+    finished_at: datetime | None
+    error_message: str | None
+    created_at: datetime
+    updated_at: datetime
+    quality_checks: list[QualityCheckRead] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MetricsSummary(BaseModel):
+    total_runs: int
+    runs_by_status: dict[str, int]
+    failed_quality_checks: int
+    warning_quality_checks: int
