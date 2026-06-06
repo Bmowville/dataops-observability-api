@@ -12,8 +12,17 @@ from app.schemas.pipeline import (
     PipelineRunTimelineEvent,
     PipelineRunUpdate,
     QualityCheckCreate,
+    QualityCheckSeverity,
+    QualityCheckSeverityRollup,
     QualityCheckStatus,
 )
+
+SEVERITY_PRIORITY = {
+    QualityCheckSeverity.critical.value: 0,
+    QualityCheckSeverity.high.value: 1,
+    QualityCheckSeverity.medium.value: 2,
+    QualityCheckSeverity.low.value: 3,
+}
 
 
 def create_pipeline_run(db: Session, payload: PipelineRunCreate) -> PipelineRun:
@@ -245,3 +254,33 @@ def get_pipeline_health_rollups(db: Session) -> list[PipelineHealthRollup]:
         )
 
     return sorted(rollups, key=lambda rollup: rollup.name)
+
+
+def get_quality_check_severity_rollups(db: Session) -> list[QualityCheckSeverityRollup]:
+    rows = db.execute(
+        select(
+            QualityCheck.severity,
+            QualityCheck.status,
+            func.count(QualityCheck.id),
+        ).group_by(QualityCheck.severity, QualityCheck.status)
+    ).all()
+
+    grouped: dict[str, dict[str, int]] = {}
+    for severity, status, count in rows:
+        grouped.setdefault(str(severity), {})[str(status)] = int(count)
+
+    rollups = [
+        QualityCheckSeverityRollup(
+            severity=QualityCheckSeverity(severity),
+            total_checks=sum(status_counts.values()),
+            passed_checks=status_counts.get(QualityCheckStatus.passed.value, 0),
+            warning_checks=status_counts.get(QualityCheckStatus.warning.value, 0),
+            failed_checks=status_counts.get(QualityCheckStatus.failed.value, 0),
+        )
+        for severity, status_counts in grouped.items()
+    ]
+
+    return sorted(
+        rollups,
+        key=lambda rollup: SEVERITY_PRIORITY[rollup.severity.value],
+    )

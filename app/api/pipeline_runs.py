@@ -15,6 +15,7 @@ from app.schemas.pipeline import (
     PipelineRunUpdate,
     QualityCheckCreate,
     QualityCheckRead,
+    QualityCheckSeverityRollup,
 )
 from app.services.pipeline_runs import (
     create_pipeline_run,
@@ -24,6 +25,7 @@ from app.services.pipeline_runs import (
     get_pipeline_health_rollups,
     get_pipeline_run,
     get_pipeline_run_timeline,
+    get_quality_check_severity_rollups,
     list_pipeline_runs,
     list_quality_checks,
     update_pipeline_run,
@@ -119,3 +121,10 @@ def summary(db: Annotated[Session, Depends(get_db)]) -> MetricsSummary:
 @router.get("/metrics/pipelines", response_model=list[PipelineHealthRollup])
 def pipeline_health(db: Annotated[Session, Depends(get_db)]) -> list[PipelineHealthRollup]:
     return get_pipeline_health_rollups(db)
+
+
+@router.get("/metrics/quality-checks", response_model=list[QualityCheckSeverityRollup])
+def quality_check_health(
+    db: Annotated[Session, Depends(get_db)],
+) -> list[QualityCheckSeverityRollup]:
+    return get_quality_check_severity_rollups(db)

@@ -144,6 +144,49 @@ def test_pipeline_health_rollups_return_empty_list_without_runs(client: TestClie
     assert response.json() == []
 
 
+def test_quality_check_severity_rollups_count_statuses_by_severity(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    seed_sample_data(db_session)
+
+    response = client.get("/api/v1/metrics/quality-checks")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "severity": "critical",
+            "total_checks": 1,
+            "passed_checks": 0,
+            "warning_checks": 0,
+            "failed_checks": 1,
+        },
+        {
+            "severity": "high",
+            "total_checks": 1,
+            "passed_checks": 1,
+            "warning_checks": 0,
+            "failed_checks": 0,
+        },
+        {
+            "severity": "medium",
+            "total_checks": 2,
+            "passed_checks": 1,
+            "warning_checks": 1,
+            "failed_checks": 0,
+        },
+    ]
+
+
+def test_quality_check_severity_rollups_return_empty_list_without_checks(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/v1/metrics/quality-checks")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_latest_pipeline_run_returns_most_recent_run_for_name(
     client: TestClient,
     db_session: Session,
