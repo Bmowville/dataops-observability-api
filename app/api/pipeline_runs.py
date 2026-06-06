@@ -7,6 +7,7 @@ from app.db.session import get_db
 from app.models.pipeline import PipelineRun
 from app.schemas.pipeline import (
     MetricsSummary,
+    PipelineHealthRollup,
     PipelineRunCreate,
     PipelineRunRead,
     PipelineRunStatus,
@@ -20,6 +21,7 @@ from app.services.pipeline_runs import (
     create_quality_check,
     get_latest_pipeline_run,
     get_metrics_summary,
+    get_pipeline_health_rollups,
     get_pipeline_run,
     get_pipeline_run_timeline,
     list_pipeline_runs,
@@ -112,3 +114,8 @@ def read_checks(run_id: int, db: Annotated[Session, Depends(get_db)]) -> list[Qu
 @router.get("/metrics/summary", response_model=MetricsSummary)
 def summary(db: Annotated[Session, Depends(get_db)]) -> MetricsSummary:
     return get_metrics_summary(db)
+
+
+@router.get("/metrics/pipelines", response_model=list[PipelineHealthRollup])
+def pipeline_health(db: Annotated[Session, Depends(get_db)]) -> list[PipelineHealthRollup]:
+    return get_pipeline_health_rollups(db)

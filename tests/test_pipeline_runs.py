@@ -111,6 +111,39 @@ def test_metrics_summary_counts_runs_and_checks(client: TestClient) -> None:
     assert payload["warning_quality_checks"] == 0
 
 
+def test_pipeline_health_rollups_group_runs_by_pipeline_name(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    seed_sample_data(db_session)
+
+    response = client.get("/api/v1/metrics/pipelines")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [rollup["name"] for rollup in payload] == ["inventory_snapshot", "orders_daily_load"]
+
+    inventory = payload[0]
+    assert inventory["total_runs"] == 1
+    assert inventory["failed_runs"] == 0
+    assert inventory["latest_status"] == "running"
+    assert inventory["warning_quality_checks"] == 1
+
+    orders = payload[1]
+    assert orders["total_runs"] == 2
+    assert orders["failed_runs"] == 1
+    assert orders["latest_status"] == "succeeded"
+    assert orders["latest_records_processed"] == 1284
+    assert orders["failed_quality_checks"] == 1
+
+
+def test_pipeline_health_rollups_return_empty_list_without_runs(client: TestClient) -> None:
+    response = client.get("/api/v1/metrics/pipelines")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_latest_pipeline_run_returns_most_recent_run_for_name(
     client: TestClient,
     db_session: Session,

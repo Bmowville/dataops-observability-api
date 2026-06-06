@@ -1,6 +1,6 @@
 [project]
 name = "dataops-observability-api"
-version = "0.1.1"
+version = "0.1.2"
 description = "FastAPI service for tracking data pipeline runs and quality checks."
 readme = "README.md"
 requires-python = ">=3.11"

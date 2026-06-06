@@ -102,6 +102,19 @@ class MetricsSummary(BaseModel):
     warning_quality_checks: int
 
 
+class PipelineHealthRollup(BaseModel):
+    name: str
+    total_runs: int
+    failed_runs: int
+    latest_run_id: int
+    latest_status: PipelineRunStatus
+    latest_run_at: datetime
+    latest_finished_at: datetime | None
+    latest_records_processed: int
+    failed_quality_checks: int
+    warning_quality_checks: int
+
+
 class SeedSampleDataSummary(BaseModel):
     pipeline_runs_created: int
     quality_checks_created: int
