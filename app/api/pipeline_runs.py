@@ -16,6 +16,7 @@ from app.schemas.pipeline import (
     QualityCheckCreate,
     QualityCheckRead,
     QualityCheckSeverityRollup,
+    StalePipelineRunMetric,
 )
 from app.services.pipeline_runs import (
     create_pipeline_run,
@@ -26,6 +27,7 @@ from app.services.pipeline_runs import (
     get_pipeline_run,
     get_pipeline_run_timeline,
     get_quality_check_severity_rollups,
+    get_stale_pipeline_run_metrics,
     list_pipeline_runs,
     list_quality_checks,
     update_pipeline_run,
@@ -128,3 +130,11 @@ def quality_check_health(
     db: Annotated[Session, Depends(get_db)],
 ) -> list[QualityCheckSeverityRollup]:
     return get_quality_check_severity_rollups(db)
+
+
+@router.get("/metrics/stale-pipeline-runs", response_model=list[StalePipelineRunMetric])
+def stale_pipeline_runs(
+    db: Annotated[Session, Depends(get_db)],
+    max_age_minutes: Annotated[int, Query(ge=1, le=1440)] = 60,
+) -> list[StalePipelineRunMetric]:
+    return get_stale_pipeline_run_metrics(db, max_age_minutes=max_age_minutes)

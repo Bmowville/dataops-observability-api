@@ -115,6 +115,17 @@ class PipelineHealthRollup(BaseModel):
     warning_quality_checks: int
 
 
+class StalePipelineRunMetric(BaseModel):
+    id: int
+    name: str
+    source_system: str
+    status: PipelineRunStatus
+    age_minutes: int
+    started_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class QualityCheckSeverityRollup(BaseModel):
     severity: QualityCheckSeverity
     total_checks: int

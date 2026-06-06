@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -182,6 +184,73 @@ def test_quality_check_severity_rollups_return_empty_list_without_checks(
     client: TestClient,
 ) -> None:
     response = client.get("/api/v1/metrics/quality-checks")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_stale_pipeline_run_metrics_return_old_active_runs(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    now = datetime.now(UTC)
+    db_session.add_all(
+        [
+            PipelineRun(
+                name="orders_daily_load",
+                source_system="warehouse",
+                status="running",
+                records_processed=800,
+                started_at=now - timedelta(hours=2),
+                created_at=now - timedelta(hours=2, minutes=5),
+                updated_at=now - timedelta(hours=2),
+            ),
+            PipelineRun(
+                name="inventory_snapshot",
+                source_system="warehouse",
+                status="queued",
+                records_processed=0,
+                created_at=now - timedelta(minutes=90),
+                updated_at=now - timedelta(minutes=90),
+            ),
+            PipelineRun(
+                name="recent_active_run",
+                source_system="warehouse",
+                status="running",
+                records_processed=120,
+                started_at=now - timedelta(minutes=20),
+                created_at=now - timedelta(minutes=25),
+                updated_at=now - timedelta(minutes=20),
+            ),
+            PipelineRun(
+                name="completed_old_run",
+                source_system="warehouse",
+                status="succeeded",
+                records_processed=1500,
+                started_at=now - timedelta(hours=3),
+                finished_at=now - timedelta(hours=2, minutes=45),
+                created_at=now - timedelta(hours=3, minutes=5),
+                updated_at=now - timedelta(hours=2, minutes=45),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    response = client.get("/api/v1/metrics/stale-pipeline-runs?max_age_minutes=60")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [run["name"] for run in payload] == ["orders_daily_load", "inventory_snapshot"]
+    assert payload[0]["status"] == "running"
+    assert payload[0]["age_minutes"] >= 119
+    assert payload[1]["status"] == "queued"
+    assert payload[1]["age_minutes"] >= 89
+
+
+def test_stale_pipeline_run_metrics_return_empty_list_without_old_active_runs(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/v1/metrics/stale-pipeline-runs?max_age_minutes=30")
 
     assert response.status_code == 200
     assert response.json() == []

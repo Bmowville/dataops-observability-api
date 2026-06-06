@@ -22,7 +22,7 @@ The API tracks operational metadata for data workflows:
 
 - Pipeline runs: source system, status, timing, records processed, and errors
 - Quality checks: check name, severity, status, expected value, observed value, and details
-- Summary metrics: run counts, failing quality checks, pipeline health, and severity rollups
+- Summary metrics: run counts, stale active runs, failing quality checks, pipeline health, and severity rollups
 
 ## Quick Start
 
@@ -76,6 +76,7 @@ python scripts/seed_sample_data.py
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/pipeline-runs/latest?name=orders_daily_load"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/pipelines"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/quality-checks"
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/stale-pipeline-runs?max_age_minutes=60"
 ```
 
 ## Docker
@@ -102,6 +103,7 @@ The container starts the FastAPI app on port `8000`. Run migrations before produ
 | GET | `/api/v1/metrics/summary` | Operational summary counts |
 | GET | `/api/v1/metrics/pipelines` | Pipeline health rollups grouped by name |
 | GET | `/api/v1/metrics/quality-checks` | Quality-check counts grouped by severity and status |
+| GET | `/api/v1/metrics/stale-pipeline-runs?max_age_minutes=60` | Active pipeline runs older than the configured age threshold |
 
 ## Configuration
 

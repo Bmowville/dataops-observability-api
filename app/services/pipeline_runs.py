@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, selectinload
@@ -15,6 +15,7 @@ from app.schemas.pipeline import (
     QualityCheckSeverity,
     QualityCheckSeverityRollup,
     QualityCheckStatus,
+    StalePipelineRunMetric,
 )
 
 SEVERITY_PRIORITY = {
@@ -23,6 +24,16 @@ SEVERITY_PRIORITY = {
     QualityCheckSeverity.medium.value: 2,
     QualityCheckSeverity.low.value: 3,
 }
+ACTIVE_RUN_STATUSES = {
+    PipelineRunStatus.queued.value,
+    PipelineRunStatus.running.value,
+}
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def create_pipeline_run(db: Session, payload: PipelineRunCreate) -> PipelineRun:
@@ -284,3 +295,39 @@ def get_quality_check_severity_rollups(db: Session) -> list[QualityCheckSeverity
         rollups,
         key=lambda rollup: SEVERITY_PRIORITY[rollup.severity.value],
     )
+
+
+def get_stale_pipeline_run_metrics(
+    db: Session,
+    max_age_minutes: int = 60,
+    now: datetime | None = None,
+) -> list[StalePipelineRunMetric]:
+    current_time = _as_utc(now or datetime.now(UTC))
+    cutoff = current_time - timedelta(minutes=max_age_minutes)
+    runs = db.scalars(
+        select(PipelineRun)
+        .where(PipelineRun.status.in_(ACTIVE_RUN_STATUSES))
+        .order_by(PipelineRun.created_at.asc())
+    ).all()
+
+    stale_runs = []
+    for run in runs:
+        reference_time = _as_utc(run.started_at or run.created_at)
+        if reference_time > cutoff:
+            continue
+
+        age_minutes = max(0, int((current_time - reference_time).total_seconds() // 60))
+        stale_runs.append(
+            StalePipelineRunMetric(
+                id=run.id,
+                name=run.name,
+                source_system=run.source_system,
+                status=PipelineRunStatus(run.status),
+                age_minutes=age_minutes,
+                started_at=run.started_at,
+                created_at=run.created_at,
+                updated_at=run.updated_at,
+            )
+        )
+
+    return sorted(stale_runs, key=lambda run: run.age_minutes, reverse=True)
