@@ -1,4 +1,9 @@
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.models.pipeline import PipelineRun, QualityCheck
+from app.services.sample_data import seed_sample_data
 
 
 def create_run(client: TestClient, name: str = "daily_orders_load") -> dict[str, object]:
@@ -104,3 +109,62 @@ def test_metrics_summary_counts_runs_and_checks(client: TestClient) -> None:
     assert payload["runs_by_status"] == {"running": 1}
     assert payload["failed_quality_checks"] == 1
     assert payload["warning_quality_checks"] == 0
+
+
+def test_latest_pipeline_run_returns_most_recent_run_for_name(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    seed_sample_data(db_session)
+
+    response = client.get("/api/v1/pipeline-runs/latest?name=orders_daily_load")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["name"] == "orders_daily_load"
+    assert payload["status"] == "succeeded"
+    assert payload["records_processed"] == 1284
+    assert len(payload["quality_checks"]) == 2
+
+
+def test_latest_pipeline_run_returns_404_for_unknown_name(client: TestClient) -> None:
+    response = client.get("/api/v1/pipeline-runs/latest?name=unknown_pipeline")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Pipeline run not found"
+
+
+def test_pipeline_run_timeline_returns_ordered_events(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    seed_sample_data(db_session)
+    latest = client.get("/api/v1/pipeline-runs/latest?name=orders_daily_load").json()
+
+    response = client.get(f"/api/v1/pipeline-runs/{latest['id']}/timeline")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [event["event_type"] for event in payload] == [
+        "run_created",
+        "run_started",
+        "quality_check",
+        "quality_check",
+        "run_finished",
+    ]
+    assert payload[-1]["status"] == "succeeded"
+
+
+def test_seed_sample_data_replaces_prior_sample_records(db_session: Session) -> None:
+    first = seed_sample_data(db_session)
+    second = seed_sample_data(db_session)
+
+    run_count = db_session.scalar(select(func.count(PipelineRun.id)))
+    check_count = db_session.scalar(select(func.count(QualityCheck.id)))
+
+    assert first.pipeline_runs_created == 3
+    assert first.quality_checks_created == 4
+    assert second.pipeline_runs_created == 3
+    assert second.quality_checks_created == 4
+    assert run_count == 3
+    assert check_count == 4

@@ -33,6 +33,7 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 Copy-Item .env.example .env
 alembic upgrade head
+python scripts/seed_sample_data.py
 uvicorn app.main:app --reload
 ```
 
@@ -68,6 +69,13 @@ curl -X POST http://127.0.0.1:8000/api/v1/pipeline-runs/1/quality-checks \
   -d '{"check_name":"row_count_minimum","status":"passed","severity":"high","expected_value":"1000+","observed_value":"1284"}'
 ```
 
+Seed and inspect local sample data:
+
+```powershell
+python scripts/seed_sample_data.py
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/pipeline-runs/latest?name=orders_daily_load"
+```
+
 ## Docker
 
 ```bash
@@ -83,8 +91,10 @@ The container starts the FastAPI app on port `8000`. Run migrations before produ
 | GET | `/health` | Service and database health |
 | POST | `/api/v1/pipeline-runs` | Create a pipeline run |
 | GET | `/api/v1/pipeline-runs` | List pipeline runs, optionally filtered by status |
+| GET | `/api/v1/pipeline-runs/latest?name={pipeline_name}` | Read the latest run for a pipeline name |
 | GET | `/api/v1/pipeline-runs/{run_id}` | Read one pipeline run |
 | PATCH | `/api/v1/pipeline-runs/{run_id}` | Update run status/details |
+| GET | `/api/v1/pipeline-runs/{run_id}/timeline` | Read ordered lifecycle and quality-check events |
 | POST | `/api/v1/pipeline-runs/{run_id}/quality-checks` | Add a quality check to a run |
 | GET | `/api/v1/pipeline-runs/{run_id}/quality-checks` | List quality checks for a run |
 | GET | `/api/v1/metrics/summary` | Operational summary counts |

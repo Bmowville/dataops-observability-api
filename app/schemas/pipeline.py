@@ -71,6 +71,14 @@ class QualityCheckRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PipelineRunTimelineEvent(BaseModel):
+    timestamp: datetime
+    event_type: str
+    title: str
+    detail: str | None = None
+    status: str | None = None
+
+
 class PipelineRunRead(BaseModel):
     id: int
     name: str
@@ -92,3 +100,9 @@ class MetricsSummary(BaseModel):
     runs_by_status: dict[str, int]
     failed_quality_checks: int
     warning_quality_checks: int
+
+
+class SeedSampleDataSummary(BaseModel):
+    pipeline_runs_created: int
+    quality_checks_created: int
+    source_system: str
