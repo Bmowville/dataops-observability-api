@@ -22,7 +22,7 @@ The API tracks operational metadata for data workflows:
 
 - Pipeline runs: source system, status, timing, records processed, and errors
 - Quality checks: check name, severity, status, expected value, observed value, and details
-- Summary metrics: run counts and failing quality checks
+- Summary metrics: run counts, failing quality checks, pipeline health, and severity rollups
 
 ## Quick Start
 
@@ -75,6 +75,7 @@ Seed and inspect local sample data:
 python scripts/seed_sample_data.py
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/pipeline-runs/latest?name=orders_daily_load"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/pipelines"
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/quality-checks"
 ```
 
 ## Docker
@@ -100,6 +101,7 @@ The container starts the FastAPI app on port `8000`. Run migrations before produ
 | GET | `/api/v1/pipeline-runs/{run_id}/quality-checks` | List quality checks for a run |
 | GET | `/api/v1/metrics/summary` | Operational summary counts |
 | GET | `/api/v1/metrics/pipelines` | Pipeline health rollups grouped by name |
+| GET | `/api/v1/metrics/quality-checks` | Quality-check counts grouped by severity and status |
 
 ## Configuration
 

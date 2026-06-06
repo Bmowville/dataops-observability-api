@@ -115,6 +115,14 @@ class PipelineHealthRollup(BaseModel):
     warning_quality_checks: int
 
 
+class QualityCheckSeverityRollup(BaseModel):
+    severity: QualityCheckSeverity
+    total_checks: int
+    passed_checks: int
+    warning_checks: int
+    failed_checks: int
+
+
 class SeedSampleDataSummary(BaseModel):
     pipeline_runs_created: int
     quality_checks_created: int
