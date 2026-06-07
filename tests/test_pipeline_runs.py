@@ -4,8 +4,18 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings, get_settings
+from app.main import app
 from app.models.pipeline import PipelineRun, QualityCheck
 from app.services.sample_data import seed_sample_data
+
+INGESTION_API_KEY_HEADER = "X-DataOps-API-Key"
+
+
+def require_test_ingestion_keys(*api_keys: str) -> None:
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        ingestion_api_keys=",".join(api_keys)
+    )
 
 
 def create_run(client: TestClient, name: str = "daily_orders_load") -> dict[str, object]:
@@ -33,6 +43,106 @@ def test_create_and_read_pipeline_run(client: TestClient) -> None:
     assert payload["source_system"] == "warehouse"
     assert payload["status"] == "running"
     assert payload["quality_checks"] == []
+
+
+def test_configured_ingestion_api_key_is_required_for_run_creation(
+    client: TestClient,
+) -> None:
+    require_test_ingestion_keys("dev-key", "rotated-key")
+    payload = {
+        "name": "daily_orders_load",
+        "source_system": "warehouse",
+        "status": "running",
+        "records_processed": 0,
+    }
+
+    missing_key = client.post("/api/v1/pipeline-runs", json=payload)
+    invalid_key = client.post(
+        "/api/v1/pipeline-runs",
+        json=payload,
+        headers={INGESTION_API_KEY_HEADER: "wrong-key"},
+    )
+    valid_key = client.post(
+        "/api/v1/pipeline-runs",
+        json=payload,
+        headers={INGESTION_API_KEY_HEADER: "rotated-key"},
+    )
+
+    assert missing_key.status_code == 401
+    assert missing_key.json()["detail"] == "Invalid or missing ingestion API key"
+    assert invalid_key.status_code == 401
+    assert valid_key.status_code == 201
+    assert valid_key.json()["name"] == "daily_orders_load"
+
+
+def test_configured_ingestion_api_key_is_required_for_mutations(
+    client: TestClient,
+) -> None:
+    require_test_ingestion_keys("dev-key")
+    created = client.post(
+        "/api/v1/pipeline-runs",
+        json={
+            "name": "daily_orders_load",
+            "source_system": "warehouse",
+            "status": "running",
+            "records_processed": 0,
+        },
+        headers={INGESTION_API_KEY_HEADER: "dev-key"},
+    ).json()
+
+    missing_patch_key = client.patch(
+        f"/api/v1/pipeline-runs/{created['id']}",
+        json={"status": "succeeded", "records_processed": 1284},
+    )
+    missing_check_key = client.post(
+        f"/api/v1/pipeline-runs/{created['id']}/quality-checks",
+        json={
+            "check_name": "row_count_minimum",
+            "status": "passed",
+            "severity": "high",
+        },
+    )
+    valid_patch_key = client.patch(
+        f"/api/v1/pipeline-runs/{created['id']}",
+        json={"status": "succeeded", "records_processed": 1284},
+        headers={INGESTION_API_KEY_HEADER: "dev-key"},
+    )
+    valid_check_key = client.post(
+        f"/api/v1/pipeline-runs/{created['id']}/quality-checks",
+        json={
+            "check_name": "row_count_minimum",
+            "status": "passed",
+            "severity": "high",
+        },
+        headers={INGESTION_API_KEY_HEADER: "dev-key"},
+    )
+
+    assert missing_patch_key.status_code == 401
+    assert missing_check_key.status_code == 401
+    assert valid_patch_key.status_code == 200
+    assert valid_check_key.status_code == 201
+
+
+def test_read_endpoints_stay_open_when_ingestion_api_key_is_configured(
+    client: TestClient,
+) -> None:
+    require_test_ingestion_keys("dev-key")
+    created = client.post(
+        "/api/v1/pipeline-runs",
+        json={
+            "name": "daily_orders_load",
+            "source_system": "warehouse",
+            "status": "running",
+            "records_processed": 0,
+        },
+        headers={INGESTION_API_KEY_HEADER: "dev-key"},
+    ).json()
+
+    run_response = client.get(f"/api/v1/pipeline-runs/{created['id']}")
+    metrics_response = client.get("/api/v1/metrics/summary")
+
+    assert run_response.status_code == 200
+    assert metrics_response.status_code == 200
 
 
 def test_list_pipeline_runs_can_filter_by_status(client: TestClient) -> None:

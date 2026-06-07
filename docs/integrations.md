@@ -9,6 +9,22 @@ DataOps Observability API is useful when pipeline runners report a small amount 
 3. Patch the pipeline run to `succeeded`, `failed`, or `canceled` when work ends.
 4. Open `/dashboard` or call `/api/v1/metrics/operations-overview` to see the operating state.
 
+## API Key Ingestion
+
+Local demos work without credentials. For a deployed service, set `INGESTION_API_KEYS` to a comma-separated list of accepted keys:
+
+```powershell
+$env:INGESTION_API_KEYS = "dev-ingest-key"
+```
+
+Then configure reporters with the matching client-side key and send it as `X-DataOps-API-Key` on write requests:
+
+```powershell
+$env:DATAOPS_API_KEY = "dev-ingest-key"
+```
+
+Read-only endpoints such as `/dashboard`, `/health`, and `/api/v1/metrics/*` remain open. Only ingestion writes require the header when keys are configured.
+
 ## Common Event Shapes
 
 Create a run:
@@ -16,6 +32,7 @@ Create a run:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/pipeline-runs \
   -H "Content-Type: application/json" \
+  -H "X-DataOps-API-Key: $DATAOPS_API_KEY" \
   -d '{"name":"orders_daily_load","source_system":"airflow","status":"running","records_processed":0}'
 ```
 
@@ -24,6 +41,7 @@ Add a quality check:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/pipeline-runs/1/quality-checks \
   -H "Content-Type: application/json" \
+  -H "X-DataOps-API-Key: $DATAOPS_API_KEY" \
   -d '{"check_name":"row_count_minimum","status":"passed","severity":"high","expected_value":"1000+","observed_value":"1284"}'
 ```
 
@@ -32,6 +50,7 @@ Finish the run:
 ```bash
 curl -X PATCH http://127.0.0.1:8000/api/v1/pipeline-runs/1 \
   -H "Content-Type: application/json" \
+  -H "X-DataOps-API-Key: $DATAOPS_API_KEY" \
   -d '{"status":"succeeded","records_processed":1284}'
 ```
 
@@ -61,6 +80,7 @@ Use environment variables to change the reported job:
 $env:DATAOPS_PIPELINE_NAME = "billing_reconciliation"
 $env:DATAOPS_SOURCE_SYSTEM = "nightly_script"
 $env:DATAOPS_RECORDS_PROCESSED = "8432"
+$env:DATAOPS_API_KEY = "dev-ingest-key"
 python examples/integrations/python_reporter.py
 ```
 
@@ -77,13 +97,13 @@ The reporter creates one pipeline run and adds a quality check for each dbt resu
 
 ## Airflow
 
-Copy `examples/integrations/airflow_dag.py` into your Airflow DAGs folder and set `DATAOPS_API_URL` in the Airflow environment. The DAG demonstrates the reporting shape without requiring the API to own scheduling or orchestration.
+Copy `examples/integrations/airflow_dag.py` into your Airflow DAGs folder and set `DATAOPS_API_URL` in the Airflow environment. If the API is protected, also set `DATAOPS_API_KEY` from your Airflow secrets or environment management. The DAG demonstrates the reporting shape without requiring the API to own scheduling or orchestration.
 
 ## GitHub Actions
 
 Copy `examples/integrations/github-actions-report.yml` into `.github/workflows/` in the repository that owns the data job. Replace the placeholder job step with the actual pipeline command and point `DATAOPS_API_URL` at a reachable DataOps Observability API deployment.
 
-For production use, store the API URL and any future credentials as GitHub Actions secrets instead of hard-coding them in the workflow file.
+For production use, store `DATAOPS_API_KEY` as a GitHub Actions secret and keep the API URL in repository variables or secrets instead of hard-coding deployment details.
 
 ## What This Enables
 

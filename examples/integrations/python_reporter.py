@@ -20,11 +20,14 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 API_BASE_URL = os.getenv("DATAOPS_API_URL", "http://127.0.0.1:8000").rstrip("/")
+API_KEY = os.getenv("DATAOPS_API_KEY", "")
 
 
 def request_json(method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     data = None
     headers = {"Accept": "application/json"}
+    if API_KEY:
+        headers["X-DataOps-API-Key"] = API_KEY
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
         headers["Content-Type"] = "application/json"

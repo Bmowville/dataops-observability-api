@@ -14,6 +14,7 @@ Most pipeline monitoring tools stop at raw events, logs, or generic charts. This
 - one response that combines run status, quality results, stale work, and recommended actions
 - a small dashboard that makes the API useful immediately after seeding sample data
 - integration-friendly endpoints for Airflow, dbt, cron jobs, GitHub Actions, or custom ETL scripts
+- optional API-key protection for ingestion writes when the service is exposed outside a local machine
 - a codebase small enough for teams to adapt instead of adopting a heavy platform
 
 See [docs/integrations.md](docs/integrations.md) for copy-paste examples that report pipeline events from Python jobs, GitHub Actions, Airflow, and dbt.
@@ -70,6 +71,8 @@ The API is designed to receive events from pipeline tools instead of replacing t
 
 Full setup notes live in [docs/integrations.md](docs/integrations.md).
 
+Set `INGESTION_API_KEYS` to require external reporters to send `X-DataOps-API-Key` on write requests. Read-only dashboard and metrics endpoints stay open so operators can inspect service health without sharing ingestion credentials.
+
 ## Run Quality Gates
 
 ```powershell
@@ -86,6 +89,7 @@ Create a pipeline run:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/pipeline-runs \
   -H "Content-Type: application/json" \
+  -H "X-DataOps-API-Key: $DATAOPS_API_KEY" \
   -d '{"name":"daily_orders_load","source_system":"warehouse","status":"running","records_processed":0}'
 ```
 
@@ -94,6 +98,7 @@ Add a quality check:
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/pipeline-runs/1/quality-checks \
   -H "Content-Type: application/json" \
+  -H "X-DataOps-API-Key: $DATAOPS_API_KEY" \
   -d '{"check_name":"row_count_minimum","status":"passed","severity":"high","expected_value":"1000+","observed_value":"1284"}'
 ```
 
@@ -162,6 +167,15 @@ Settings are loaded from environment variables.
 | `ENVIRONMENT` | `local` | Environment label returned by health checks |
 | `DATABASE_URL` | `sqlite:///./dataops_observability.db` | SQLAlchemy database URL |
 | `API_PREFIX` | `/api/v1` | Versioned API prefix |
+| `INGESTION_API_KEYS` | empty | Comma-separated keys accepted by write/ingestion endpoints. When empty, local writes are open. |
+
+When `INGESTION_API_KEYS` is set, these write endpoints require `X-DataOps-API-Key`:
+
+- `POST /api/v1/pipeline-runs`
+- `PATCH /api/v1/pipeline-runs/{run_id}`
+- `POST /api/v1/pipeline-runs/{run_id}/quality-checks`
+
+Use different keys during rotation by setting a comma-separated value such as `INGESTION_API_KEYS=old-key,new-key`. Store real keys in your deployment secret manager, CI secrets, or local `.env` file rather than committing them.
 
 ## Notes
 

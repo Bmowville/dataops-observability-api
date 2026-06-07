@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.security import require_ingestion_api_key
 from app.db.session import get_db
 from app.models.pipeline import PipelineRun
 from app.schemas.pipeline import (
@@ -45,7 +46,12 @@ def _get_run_or_404(db: Session, run_id: int) -> PipelineRun:
     return run
 
 
-@router.post("/pipeline-runs", response_model=PipelineRunRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/pipeline-runs",
+    response_model=PipelineRunRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_ingestion_api_key)],
+)
 def create_run(
     payload: PipelineRunCreate,
     db: Annotated[Session, Depends(get_db)],
@@ -87,7 +93,11 @@ def read_run_timeline(
     return get_pipeline_run_timeline(run)
 
 
-@router.patch("/pipeline-runs/{run_id}", response_model=PipelineRunRead)
+@router.patch(
+    "/pipeline-runs/{run_id}",
+    response_model=PipelineRunRead,
+    dependencies=[Depends(require_ingestion_api_key)],
+)
 def patch_run(
     run_id: int,
     payload: PipelineRunUpdate,
@@ -101,6 +111,7 @@ def patch_run(
     "/pipeline-runs/{run_id}/quality-checks",
     response_model=QualityCheckRead,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_ingestion_api_key)],
 )
 def create_check(
     run_id: int,
