@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.pipeline import PipelineRun, QualityCheck
+from app.models.pipeline import PipelineDefinition, PipelineRun, QualityCheck
 from app.schemas.pipeline import (
     MetricsSummary,
     OperationsOverview,
@@ -36,6 +36,11 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
+
+
+def get_pipeline_definition_map(db: Session) -> dict[str, PipelineDefinition]:
+    definitions = db.scalars(select(PipelineDefinition)).all()
+    return {definition.name: definition for definition in definitions}
 
 
 def create_pipeline_run(db: Session, payload: PipelineRunCreate) -> PipelineRun:
@@ -224,6 +229,7 @@ def get_metrics_summary(db: Session) -> MetricsSummary:
 
 
 def get_pipeline_health_rollups(db: Session) -> list[PipelineHealthRollup]:
+    definitions = get_pipeline_definition_map(db)
     runs = db.scalars(
         select(PipelineRun)
         .options(selectinload(PipelineRun.quality_checks))
@@ -240,6 +246,7 @@ def get_pipeline_health_rollups(db: Session) -> list[PipelineHealthRollup]:
 
     rollups = []
     for name, pipeline_runs in grouped_runs.items():
+        definition = definitions.get(name)
         latest_run = max(
             pipeline_runs,
             key=lambda run: run.started_at or run.created_at,
@@ -248,6 +255,24 @@ def get_pipeline_health_rollups(db: Session) -> list[PipelineHealthRollup]:
         rollups.append(
             PipelineHealthRollup(
                 name=name,
+                owner=definition.owner if definition is not None else None,
+                source_system=(
+                    definition.source_system if definition is not None else latest_run.source_system
+                ),
+                expected_cadence_minutes=(
+                    definition.expected_cadence_minutes if definition is not None else None
+                ),
+                stale_after_minutes=(
+                    definition.stale_after_minutes if definition is not None else None
+                ),
+                alert_severity=(
+                    QualityCheckSeverity(definition.alert_severity)
+                    if definition is not None
+                    else None
+                ),
+                runbook_url=definition.runbook_url if definition is not None else None,
+                is_registered=definition is not None,
+                is_enabled=definition.is_enabled if definition is not None else True,
                 total_runs=len(pipeline_runs),
                 failed_runs=sum(
                     1 for run in pipeline_runs if run.status == PipelineRunStatus.failed
@@ -305,7 +330,7 @@ def get_stale_pipeline_run_metrics(
     now: datetime | None = None,
 ) -> list[StalePipelineRunMetric]:
     current_time = _as_utc(now or datetime.now(UTC))
-    cutoff = current_time - timedelta(minutes=max_age_minutes)
+    definitions = get_pipeline_definition_map(db)
     runs = db.scalars(
         select(PipelineRun)
         .where(PipelineRun.status.in_(ACTIVE_RUN_STATUSES))
@@ -314,6 +339,14 @@ def get_stale_pipeline_run_metrics(
 
     stale_runs = []
     for run in runs:
+        definition = definitions.get(run.name)
+        if definition is not None and not definition.is_enabled:
+            continue
+
+        stale_after_minutes = (
+            definition.stale_after_minutes if definition is not None else max_age_minutes
+        )
+        cutoff = current_time - timedelta(minutes=stale_after_minutes)
         reference_time = _as_utc(run.started_at or run.created_at)
         if reference_time > cutoff:
             continue
@@ -323,7 +356,12 @@ def get_stale_pipeline_run_metrics(
             StalePipelineRunMetric(
                 id=run.id,
                 name=run.name,
-                source_system=run.source_system,
+                owner=definition.owner if definition is not None else None,
+                runbook_url=definition.runbook_url if definition is not None else None,
+                stale_after_minutes=stale_after_minutes,
+                source_system=(
+                    definition.source_system if definition is not None else run.source_system
+                ),
                 status=PipelineRunStatus(run.status),
                 age_minutes=age_minutes,
                 started_at=run.started_at,
@@ -377,10 +415,7 @@ def get_operations_overview(
             RecommendedAction(
                 priority="high",
                 title="Resolve stale active runs",
-                detail=(
-                    f"{len(stale_pipeline_runs)} active runs exceeded "
-                    f"{stale_after_minutes} minutes."
-                ),
+                detail=f"{len(stale_pipeline_runs)} active runs exceeded configured thresholds.",
             )
         )
     if summary.warning_quality_checks:

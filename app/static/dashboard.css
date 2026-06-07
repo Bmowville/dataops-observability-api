@@ -265,7 +265,7 @@ h2 {
 
 table {
   width: 100%;
-  min-width: 620px;
+  min-width: 760px;
   border-collapse: collapse;
 }
 
@@ -290,6 +290,17 @@ tr:last-child td {
 
 td.numeric {
   font-variant-numeric: tabular-nums;
+}
+
+.table-link {
+  color: var(--blue);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.table-link:hover,
+.table-link:focus-visible {
+  text-decoration: underline;
 }
 
 @media (max-width: 900px) {

@@ -12,6 +12,7 @@ Most pipeline monitoring tools stop at raw events, logs, or generic charts. This
 
 - one place to see current pipeline health
 - one response that combines run status, quality results, stale work, and recommended actions
+- a pipeline registry for owners, cadences, runbooks, and stale thresholds
 - a small dashboard that makes the API useful immediately after seeding sample data
 - integration-friendly endpoints for Airflow, dbt, cron jobs, GitHub Actions, or custom ETL scripts
 - optional API-key protection for ingestion writes when the service is exposed outside a local machine
@@ -37,6 +38,7 @@ See [docs/integrations.md](docs/integrations.md) for copy-paste examples that re
 
 The API tracks operational metadata for data workflows:
 
+- Pipeline registry: owner, source system, cadence, stale threshold, alert severity, runbook, and enabled status
 - Pipeline runs: source system, status, timing, records processed, and errors
 - Quality checks: check name, severity, status, expected value, observed value, and details
 - Summary metrics: run counts, stale active runs, failing quality checks, pipeline health, and severity rollups
@@ -60,7 +62,7 @@ Open:
 - API docs: http://127.0.0.1:8000/docs
 - Health check: http://127.0.0.1:8000/health
 
-The seeded data creates a realistic operating state with a successful pipeline, a failed historical run, a stale active run, quality checks, and recommended actions.
+The seeded data creates a realistic operating state with registered pipeline ownership, a successful pipeline, a failed historical run, a stale active run, quality checks, and recommended actions.
 
 ## Integrations
 
@@ -72,6 +74,8 @@ The API is designed to receive events from pipeline tools instead of replacing t
 - `dbt_run_results.py` for turning dbt run results into quality checks
 
 Full setup notes live in [docs/integrations.md](docs/integrations.md).
+
+Register pipelines with owners, cadences, stale thresholds, and runbook URLs before reporting runs. The dashboard and operations overview use those definitions to explain who owns stale work and which runbook should be opened.
 
 Set `INGESTION_API_KEYS` to require external reporters to send `X-DataOps-API-Key` on write requests. Read-only dashboard and metrics endpoints stay open so operators can inspect service health without sharing ingestion credentials.
 
@@ -89,6 +93,15 @@ pytest
 ```
 
 ## Example Requests
+
+Register a pipeline:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/pipelines \
+  -H "Content-Type: application/json" \
+  -H "X-DataOps-API-Key: $DATAOPS_API_KEY" \
+  -d '{"name":"daily_orders_load","owner":"Data Platform","source_system":"warehouse","expected_cadence_minutes":1440,"stale_after_minutes":90,"alert_severity":"high","runbook_url":"https://runbooks.example.com/orders-daily-load"}'
+```
 
 Create a pipeline run:
 
@@ -112,6 +125,7 @@ Seed and inspect local sample data:
 
 ```powershell
 python scripts/seed_sample_data.py
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/pipelines"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/pipeline-runs/latest?name=orders_daily_load"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/pipelines"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/operations-overview?stale_after_minutes=60"
@@ -132,6 +146,10 @@ The container starts the FastAPI app on port `8000`. Run migrations before produ
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/health` | Service and database health |
+| POST | `/api/v1/pipelines` | Register a pipeline owner, cadence, stale threshold, and runbook |
+| GET | `/api/v1/pipelines?enabled=true` | List registered pipelines, optionally filtered by enabled status |
+| GET | `/api/v1/pipelines/{name}` | Read one registered pipeline definition |
+| PATCH | `/api/v1/pipelines/{name}` | Update pipeline ownership, SLA, runbook, or enabled status |
 | POST | `/api/v1/pipeline-runs` | Create a pipeline run |
 | GET | `/api/v1/pipeline-runs` | List pipeline runs, optionally filtered by status |
 | GET | `/api/v1/pipeline-runs/latest?name={pipeline_name}` | Read the latest run for a pipeline name |
@@ -150,7 +168,7 @@ The container starts the FastAPI app on port `8000`. Run migrations before produ
 
 ## Dashboard
 
-The `/dashboard` page is a read-only operator view backed by `/api/v1/metrics/operations-overview` and `/api/v1/alerts/deliveries`. It surfaces the service status, summary counts, recommended actions, pipeline health, quality-check rollups, stale active runs, and recent alert delivery results.
+The `/dashboard` page is a read-only operator view backed by `/api/v1/metrics/operations-overview` and `/api/v1/alerts/deliveries`. It surfaces the service status, summary counts, recommended actions, pipeline ownership, cadence, runbook links, quality-check rollups, stale active runs, and recent alert delivery results.
 
 Run `python scripts/seed_sample_data.py`, start the app, and open `http://127.0.0.1:8000/dashboard` to see the project with demo data.
 
@@ -160,9 +178,9 @@ The `/api/v1/metrics/operations-overview` endpoint combines the service's most u
 
 - `service_status`: `healthy`, `degraded`, or `attention_required`
 - `summary`: total runs, run statuses, and quality-check counts
-- `pipeline_health`: latest run state and quality-check counts by pipeline name
+- `pipeline_health`: owner, cadence, runbook, latest run state, and quality-check counts by pipeline name
 - `quality_checks`: severity and status rollups
-- `stale_pipeline_runs`: active runs older than the requested threshold
+- `stale_pipeline_runs`: active runs older than their registered stale threshold, or the requested fallback threshold when unregistered
 - `recommended_actions`: prioritized next steps for failed checks, failed latest runs, stale active runs, and warnings
 
 ## Configuration
@@ -183,6 +201,8 @@ Settings are loaded from environment variables.
 
 When `INGESTION_API_KEYS` is set, these write endpoints require `X-DataOps-API-Key`:
 
+- `POST /api/v1/pipelines`
+- `PATCH /api/v1/pipelines/{name}`
 - `POST /api/v1/pipeline-runs`
 - `PATCH /api/v1/pipeline-runs/{run_id}`
 - `POST /api/v1/pipeline-runs/{run_id}/quality-checks`

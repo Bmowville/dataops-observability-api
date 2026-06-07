@@ -33,6 +33,21 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function formatDurationMinutes(value) {
+  if (!value) {
+    return "Not set";
+  }
+  if (value % 1440 === 0) {
+    const days = value / 1440;
+    return `${days} ${days === 1 ? "day" : "days"}`;
+  }
+  if (value % 60 === 0) {
+    const hours = value / 60;
+    return `${hours} ${hours === 1 ? "hr" : "hrs"}`;
+  }
+  return `${value} min`;
+}
+
 function clearNode(node) {
   node.replaceChildren();
 }
@@ -74,6 +89,23 @@ function textCell(value) {
   return cell;
 }
 
+function linkCell(url) {
+  const cell = document.createElement("td");
+  if (!url) {
+    cell.textContent = "None";
+    return cell;
+  }
+
+  const link = document.createElement("a");
+  link.className = "table-link";
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  link.textContent = "Open";
+  cell.append(link);
+  return cell;
+}
+
 function renderActions(actions) {
   clearNode(elements.actions);
   elements.actionCount.textContent = `${actions.length} open`;
@@ -102,7 +134,7 @@ function renderActions(actions) {
 function renderPipelines(pipelines) {
   clearNode(elements.pipelines);
   if (!pipelines.length) {
-    elements.pipelines.append(emptyRow("No pipeline runs recorded.", 5));
+    elements.pipelines.append(emptyRow("No pipeline runs recorded.", 7));
     return;
   }
 
@@ -112,10 +144,12 @@ function renderPipelines(pipelines) {
     statusCell.append(statusPill(pipeline.latest_status));
     row.append(
       textCell(pipeline.name),
+      textCell(pipeline.owner || "Unassigned"),
       statusCell,
-      numericCell(pipeline.total_runs),
+      textCell(formatDurationMinutes(pipeline.expected_cadence_minutes)),
       numericCell(pipeline.failed_quality_checks),
       numericCell(pipeline.warning_quality_checks),
+      linkCell(pipeline.runbook_url),
     );
     elements.pipelines.append(row);
   }
@@ -144,7 +178,7 @@ function renderQuality(qualityChecks) {
 function renderStaleRuns(runs) {
   clearNode(elements.stale);
   if (!runs.length) {
-    elements.stale.append(emptyRow("No stale active runs.", 4));
+    elements.stale.append(emptyRow("No stale active runs.", 6));
     return;
   }
 
@@ -154,9 +188,11 @@ function renderStaleRuns(runs) {
     statusCell.append(statusPill(run.status));
     row.append(
       textCell(run.name),
+      textCell(run.owner || "Unassigned"),
       statusCell,
       numericCell(`${run.age_minutes} min`),
-      textCell(run.source_system),
+      numericCell(formatDurationMinutes(run.stale_after_minutes)),
+      linkCell(run.runbook_url),
     );
     elements.stale.append(row);
   }
