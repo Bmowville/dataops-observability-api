@@ -1,4 +1,5 @@
 const OVERVIEW_URL = "/api/v1/metrics/operations-overview?stale_after_minutes=10";
+const ALERT_DELIVERIES_URL = "/api/v1/alerts/deliveries?limit=5";
 
 const elements = {
   serviceStatus: document.querySelector("[data-service-status]"),
@@ -12,6 +13,7 @@ const elements = {
   pipelines: document.querySelector("[data-pipelines]"),
   quality: document.querySelector("[data-quality]"),
   stale: document.querySelector("[data-stale]"),
+  alertDeliveries: document.querySelector("[data-alert-deliveries]"),
   refresh: document.querySelector("[data-refresh]"),
 };
 
@@ -160,6 +162,28 @@ function renderStaleRuns(runs) {
   }
 }
 
+function renderAlertDeliveries(deliveries) {
+  clearNode(elements.alertDeliveries);
+  if (!deliveries.length) {
+    elements.alertDeliveries.append(emptyRow("No alert deliveries recorded.", 5));
+    return;
+  }
+
+  for (const delivery of deliveries) {
+    const row = document.createElement("tr");
+    const statusCell = document.createElement("td");
+    statusCell.append(statusPill(delivery.status));
+    row.append(
+      textCell(formatLabel(delivery.event_type)),
+      textCell(delivery.receiver),
+      statusCell,
+      numericCell(delivery.http_status_code ?? "none"),
+      textCell(formatDate(delivery.created_at)),
+    );
+    elements.alertDeliveries.append(row);
+  }
+}
+
 function renderOverview(overview) {
   elements.serviceStatus.textContent = formatLabel(overview.service_status);
   elements.serviceStatus.className = `status-pill ${overview.service_status}`;
@@ -187,16 +211,25 @@ function renderError(error) {
 async function refreshDashboard() {
   elements.refresh.disabled = true;
   try {
-    const response = await fetch(OVERVIEW_URL, { headers: { Accept: "application/json" } });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    renderOverview(await response.json());
+    const [overview, alertDeliveries] = await Promise.all([
+      fetchJson(OVERVIEW_URL),
+      fetchJson(ALERT_DELIVERIES_URL),
+    ]);
+    renderOverview(overview);
+    renderAlertDeliveries(alertDeliveries);
   } catch (error) {
     renderError(error);
   } finally {
     elements.refresh.disabled = false;
   }
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  return response.json();
 }
 
 elements.refresh.addEventListener("click", refreshDashboard);

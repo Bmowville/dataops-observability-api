@@ -16,6 +16,7 @@ Most pipeline monitoring tools stop at raw events, logs, or generic charts. This
 - integration-friendly endpoints for Airflow, dbt, cron jobs, GitHub Actions, or custom ETL scripts
 - optional API-key protection for ingestion writes when the service is exposed outside a local machine
 - webhook alerts for failed pipeline runs and quality checks that need operator attention
+- alert delivery audit history so operators can verify which receiver was notified
 - a codebase small enough for teams to adapt instead of adopting a heavy platform
 
 See [docs/integrations.md](docs/integrations.md) for copy-paste examples that report pipeline events from Python jobs, GitHub Actions, Airflow, and dbt.
@@ -75,6 +76,8 @@ Full setup notes live in [docs/integrations.md](docs/integrations.md).
 Set `INGESTION_API_KEYS` to require external reporters to send `X-DataOps-API-Key` on write requests. Read-only dashboard and metrics endpoints stay open so operators can inspect service health without sharing ingestion credentials.
 
 Set `ALERT_WEBHOOK_URLS` to send operational alerts to Slack-compatible bridges, incident tooling, or custom automation when runs fail/cancel or quality checks warn/fail.
+
+Webhook delivery attempts are persisted and exposed through `/api/v1/alerts/deliveries`, `/api/v1/alerts/deliveries/latest`, and the dashboard.
 
 ## Run Quality Gates
 
@@ -142,10 +145,12 @@ The container starts the FastAPI app on port `8000`. Run migrations before produ
 | GET | `/api/v1/metrics/pipelines` | Pipeline health rollups grouped by name |
 | GET | `/api/v1/metrics/quality-checks` | Quality-check counts grouped by severity and status |
 | GET | `/api/v1/metrics/stale-pipeline-runs?max_age_minutes=60` | Active pipeline runs older than the configured age threshold |
+| GET | `/api/v1/alerts/deliveries?status=failed&limit=100` | List recent webhook delivery attempts, optionally filtered by result |
+| GET | `/api/v1/alerts/deliveries/latest` | Read the latest webhook delivery attempt |
 
 ## Dashboard
 
-The `/dashboard` page is a read-only operator view backed by `/api/v1/metrics/operations-overview`. It surfaces the service status, summary counts, recommended actions, pipeline health, quality-check rollups, and stale active runs from the same API response that external tools can consume.
+The `/dashboard` page is a read-only operator view backed by `/api/v1/metrics/operations-overview` and `/api/v1/alerts/deliveries`. It surfaces the service status, summary counts, recommended actions, pipeline health, quality-check rollups, stale active runs, and recent alert delivery results.
 
 Run `python scripts/seed_sample_data.py`, start the app, and open `http://127.0.0.1:8000/dashboard` to see the project with demo data.
 
@@ -204,6 +209,14 @@ $env:ALERT_WEBHOOK_SECRET = "shared-secret"
 ```
 
 Alert payloads include `event_type`, `severity`, `message`, the affected pipeline run, optional quality-check details, and links back to the dashboard, run detail endpoint, and timeline endpoint.
+
+Each configured receiver attempt is recorded in `alert_deliveries` with the event type, sanitized receiver URL, result, HTTP status code when available, error message when available, and timestamp. Query recent attempts with:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries?limit=20"
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries?status=failed"
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries/latest"
+```
 
 ## Notes
 

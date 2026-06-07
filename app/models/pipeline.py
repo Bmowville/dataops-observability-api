@@ -54,3 +54,25 @@ class QualityCheck(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     pipeline_run: Mapped[PipelineRun] = relationship(back_populates="quality_checks")
+
+
+class AlertDelivery(Base):
+    __tablename__ = "alert_deliveries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(80), index=True)
+    pipeline_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pipeline_runs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    quality_check_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quality_checks.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    receiver: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    http_status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

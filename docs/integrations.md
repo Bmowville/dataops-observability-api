@@ -83,6 +83,18 @@ Every configured receiver gets a JSON payload like this:
 
 If `ALERT_WEBHOOK_SECRET` is set, deliveries include `X-DataOps-Webhook-Secret`. Receivers should verify that header before acting on an alert.
 
+Every receiver attempt is persisted so operators can confirm whether the alert actually reached each destination. The service stores the event type, sanitized receiver URL, delivery result, HTTP status code when available, error message when available, and timestamp.
+
+Inspect recent deliveries:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries?limit=20"
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries?status=failed"
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries/latest"
+```
+
+The dashboard also shows the five most recent alert delivery attempts next to the existing pipeline and quality-check views.
+
 ## Common Event Shapes
 
 Create a run:
@@ -170,4 +182,5 @@ Once pipelines report this minimal status data, the dashboard and metrics endpoi
 - Which pipelines need attention right now?
 - Which runs are stale or still active past the expected window?
 - Which quality checks are failing or warning?
+- Did the alert delivery reach every configured receiver?
 - What action should an operator take first?

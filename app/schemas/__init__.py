@@ -1,4 +1,6 @@
 from app.schemas.pipeline import (
+    AlertDeliveryRead,
+    AlertDeliveryStatus,
     HealthResponse,
     MetricsSummary,
     PipelineRunCreate,
@@ -12,6 +14,8 @@ from app.schemas.pipeline import (
 )
 
 __all__ = [
+    "AlertDeliveryRead",
+    "AlertDeliveryStatus",
     "HealthResponse",
     "MetricsSummary",
     "PipelineRunCreate",
