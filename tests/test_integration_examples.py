@@ -13,7 +13,9 @@ def test_integration_examples_are_present() -> None:
         "python_reporter.py",
     }
 
-    assert expected_files == {path.name for path in INTEGRATION_EXAMPLES.iterdir()}
+    actual_files = {path.name for path in INTEGRATION_EXAMPLES.iterdir() if path.is_file()}
+
+    assert expected_files == actual_files
 
 
 def test_python_integration_examples_compile() -> None:

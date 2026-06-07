@@ -15,16 +15,27 @@ import requests
 from airflow.decorators import dag, task
 
 DATAOPS_API_URL = os.getenv("DATAOPS_API_URL", "http://dataops-api:8000").rstrip("/")
+DATAOPS_API_KEY = os.getenv("DATAOPS_API_KEY", "")
+
+
+def api_headers() -> dict[str, str]:
+    if not DATAOPS_API_KEY:
+        return {}
+    return {"X-DataOps-API-Key": DATAOPS_API_KEY}
 
 
 def post_json(path: str, payload: dict[str, Any]) -> dict[str, Any]:
-    response = requests.post(f"{DATAOPS_API_URL}{path}", json=payload, timeout=10)
+    response = requests.post(
+        f"{DATAOPS_API_URL}{path}", json=payload, headers=api_headers(), timeout=10
+    )
     response.raise_for_status()
     return response.json()
 
 
 def patch_json(path: str, payload: dict[str, Any]) -> dict[str, Any]:
-    response = requests.patch(f"{DATAOPS_API_URL}{path}", json=payload, timeout=10)
+    response = requests.patch(
+        f"{DATAOPS_API_URL}{path}", json=payload, headers=api_headers(), timeout=10
+    )
     response.raise_for_status()
     return response.json()
 
