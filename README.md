@@ -16,6 +16,8 @@ Most pipeline monitoring tools stop at raw events, logs, or generic charts. This
 - integration-friendly endpoints for Airflow, dbt, cron jobs, GitHub Actions, or custom ETL scripts
 - a codebase small enough for teams to adapt instead of adopting a heavy platform
 
+See [docs/integrations.md](docs/integrations.md) for copy-paste examples that report pipeline events from Python jobs, GitHub Actions, Airflow, and dbt.
+
 ## Service Scope
 
 - FastAPI application structure with versioned API routes
@@ -56,6 +58,17 @@ Open:
 - Health check: http://127.0.0.1:8000/health
 
 The seeded data creates a realistic operating state with a successful pipeline, a failed historical run, a stale active run, quality checks, and recommended actions.
+
+## Integrations
+
+The API is designed to receive events from pipeline tools instead of replacing them. Start with the examples in `examples/integrations/`:
+
+- `python_reporter.py` for cron jobs, notebooks, scheduled scripts, or custom ETL
+- `github-actions-report.yml` for CI-driven pipeline runs
+- `airflow_dag.py` for Airflow task reporting
+- `dbt_run_results.py` for turning dbt run results into quality checks
+
+Full setup notes live in [docs/integrations.md](docs/integrations.md).
 
 ## Run Quality Gates
 

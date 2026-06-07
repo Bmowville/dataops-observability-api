@@ -1,0 +1,44 @@
+name: Report Pipeline Run To DataOps
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * *"
+
+env:
+  DATAOPS_API_URL: ${{ vars.DATAOPS_API_URL }}
+  PIPELINE_NAME: orders_daily_load
+
+jobs:
+  report-run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create pipeline run
+        id: create-run
+        run: |
+          response=$(curl -sS -X POST "$DATAOPS_API_URL/api/v1/pipeline-runs" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"$PIPELINE_NAME\",\"source_system\":\"github_actions\",\"status\":\"running\",\"records_processed\":0}")
+          echo "$response"
+          run_id=$(python -c "import json,sys; print(json.load(sys.stdin)['id'])" <<< "$response")
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Run data job
+        run: |
+          echo "Replace this step with your extract, transform, or validation command."
+          echo "records_processed=1284" >> "$GITHUB_ENV"
+
+      - name: Report quality check
+        run: |
+          curl -sS -X POST "$DATAOPS_API_URL/api/v1/pipeline-runs/${{ steps.create-run.outputs.run_id }}/quality-checks" \
+            -H "Content-Type: application/json" \
+            -d "{\"check_name\":\"row_count_minimum\",\"status\":\"passed\",\"severity\":\"high\",\"expected_value\":\"1000+\",\"observed_value\":\"$records_processed\"}"
+
+      - name: Finish pipeline run
+        if: always()
+        run: |
+          status="succeeded"
+          if [ "${{ job.status }}" != "success" ]; then status="failed"; fi
+          curl -sS -X PATCH "$DATAOPS_API_URL/api/v1/pipeline-runs/${{ steps.create-run.outputs.run_id }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"status\":\"$status\",\"records_processed\":${records_processed:-0}}"
