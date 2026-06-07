@@ -25,6 +25,64 @@ $env:DATAOPS_API_KEY = "dev-ingest-key"
 
 Read-only endpoints such as `/dashboard`, `/health`, and `/api/v1/metrics/*` remain open. Only ingestion writes require the header when keys are configured.
 
+## Webhook Alerts
+
+Webhook alerts turn ingested events into operator notifications. Configure one or more receivers with `ALERT_WEBHOOK_URLS`:
+
+```powershell
+$env:PUBLIC_BASE_URL = "https://dataops.example.com"
+$env:ALERT_WEBHOOK_URLS = "https://hooks.example.com/dataops"
+$env:ALERT_WEBHOOK_SECRET = "shared-secret"
+```
+
+The service sends alerts in the background after the API write succeeds. Alerts fire for:
+
+- pipeline runs patched to `failed` or `canceled`
+- quality checks created as `failed` or `warning`
+
+Successful runs and passed checks are recorded without sending notifications.
+
+Every configured receiver gets a JSON payload like this:
+
+```json
+{
+  "event_type": "quality_check_failed",
+  "severity": "critical",
+  "message": "Quality check freshness_sla is failed for orders_daily_load.",
+  "occurred_at": "2026-06-07T21:00:00+00:00",
+  "pipeline_run": {
+    "id": 42,
+    "name": "orders_daily_load",
+    "source_system": "airflow",
+    "status": "running",
+    "records_processed": 1284,
+    "started_at": "2026-06-07T20:55:00+00:00",
+    "finished_at": null,
+    "error_message": null,
+    "created_at": "2026-06-07T20:55:00+00:00",
+    "updated_at": "2026-06-07T20:55:00+00:00"
+  },
+  "quality_check": {
+    "id": 9,
+    "pipeline_run_id": 42,
+    "check_name": "freshness_sla",
+    "status": "failed",
+    "severity": "critical",
+    "expected_value": "less than 2 hours",
+    "observed_value": "4 hours",
+    "details": "Warehouse table is stale.",
+    "created_at": "2026-06-07T21:00:00+00:00"
+  },
+  "links": {
+    "dashboard": "https://dataops.example.com/dashboard",
+    "pipeline_run": "https://dataops.example.com/api/v1/pipeline-runs/42",
+    "timeline": "https://dataops.example.com/api/v1/pipeline-runs/42/timeline"
+  }
+}
+```
+
+If `ALERT_WEBHOOK_SECRET` is set, deliveries include `X-DataOps-Webhook-Secret`. Receivers should verify that header before acting on an alert.
+
 ## Common Event Shapes
 
 Create a run:

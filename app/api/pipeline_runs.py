@@ -1,8 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings, get_settings
 from app.core.security import require_ingestion_api_key
 from app.db.session import get_db
 from app.models.pipeline import PipelineRun
@@ -35,6 +36,7 @@ from app.services.pipeline_runs import (
     list_quality_checks,
     update_pipeline_run,
 )
+from app.services.webhook_alerts import queue_pipeline_run_alert, queue_quality_check_alert
 
 router = APIRouter(tags=["pipeline runs"])
 
@@ -54,9 +56,13 @@ def _get_run_or_404(db: Session, run_id: int) -> PipelineRun:
 )
 def create_run(
     payload: PipelineRunCreate,
+    background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> PipelineRun:
-    return create_pipeline_run(db, payload)
+    run = create_pipeline_run(db, payload)
+    queue_pipeline_run_alert(background_tasks, settings, run)
+    return run
 
 
 @router.get("/pipeline-runs", response_model=list[PipelineRunRead])
@@ -101,10 +107,15 @@ def read_run_timeline(
 def patch_run(
     run_id: int,
     payload: PipelineRunUpdate,
+    background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> PipelineRun:
     run = _get_run_or_404(db, run_id)
-    return update_pipeline_run(db, run, payload)
+    updated_run = update_pipeline_run(db, run, payload)
+    if payload.status in {PipelineRunStatus.failed, PipelineRunStatus.canceled}:
+        queue_pipeline_run_alert(background_tasks, settings, updated_run)
+    return updated_run
 
 
 @router.post(
@@ -116,10 +127,14 @@ def patch_run(
 def create_check(
     run_id: int,
     payload: QualityCheckCreate,
+    background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> QualityCheckRead:
     run = _get_run_or_404(db, run_id)
-    return QualityCheckRead.model_validate(create_quality_check(db, run, payload))
+    check = create_quality_check(db, run, payload)
+    queue_quality_check_alert(background_tasks, settings, run, check)
+    return QualityCheckRead.model_validate(check)
 
 
 @router.get("/pipeline-runs/{run_id}/quality-checks", response_model=list[QualityCheckRead])
