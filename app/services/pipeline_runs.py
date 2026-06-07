@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.pipeline import PipelineRun, QualityCheck
 from app.schemas.pipeline import (
     MetricsSummary,
+    OperationsOverview,
     PipelineHealthRollup,
     PipelineRunCreate,
     PipelineRunStatus,
@@ -15,6 +16,7 @@ from app.schemas.pipeline import (
     QualityCheckSeverity,
     QualityCheckSeverityRollup,
     QualityCheckStatus,
+    RecommendedAction,
     StalePipelineRunMetric,
 )
 
@@ -331,3 +333,77 @@ def get_stale_pipeline_run_metrics(
         )
 
     return sorted(stale_runs, key=lambda run: run.age_minutes, reverse=True)
+
+
+def get_operations_overview(
+    db: Session,
+    stale_after_minutes: int = 60,
+    now: datetime | None = None,
+) -> OperationsOverview:
+    generated_at = _as_utc(now or datetime.now(UTC))
+    summary = get_metrics_summary(db)
+    pipeline_health = get_pipeline_health_rollups(db)
+    quality_checks = get_quality_check_severity_rollups(db)
+    stale_pipeline_runs = get_stale_pipeline_run_metrics(
+        db,
+        max_age_minutes=stale_after_minutes,
+        now=generated_at,
+    )
+    latest_failed_pipelines = [
+        rollup.name
+        for rollup in pipeline_health
+        if rollup.latest_status == PipelineRunStatus.failed
+    ]
+
+    recommended_actions: list[RecommendedAction] = []
+    if summary.failed_quality_checks:
+        recommended_actions.append(
+            RecommendedAction(
+                priority="critical",
+                title="Investigate failed quality checks",
+                detail=f"{summary.failed_quality_checks} failed checks require review.",
+            )
+        )
+    if latest_failed_pipelines:
+        recommended_actions.append(
+            RecommendedAction(
+                priority="high",
+                title="Review failed pipeline runs",
+                detail="Latest failed pipelines: " + ", ".join(latest_failed_pipelines),
+            )
+        )
+    if stale_pipeline_runs:
+        recommended_actions.append(
+            RecommendedAction(
+                priority="high",
+                title="Resolve stale active runs",
+                detail=(
+                    f"{len(stale_pipeline_runs)} active runs exceeded "
+                    f"{stale_after_minutes} minutes."
+                ),
+            )
+        )
+    if summary.warning_quality_checks:
+        recommended_actions.append(
+            RecommendedAction(
+                priority="medium",
+                title="Review warning quality checks",
+                detail=f"{summary.warning_quality_checks} warning checks may need follow-up.",
+            )
+        )
+
+    service_status = "healthy"
+    if summary.failed_quality_checks or latest_failed_pipelines or stale_pipeline_runs:
+        service_status = "attention_required"
+    elif summary.warning_quality_checks:
+        service_status = "degraded"
+
+    return OperationsOverview(
+        generated_at=generated_at,
+        service_status=service_status,
+        summary=summary,
+        pipeline_health=pipeline_health,
+        quality_checks=quality_checks,
+        stale_pipeline_runs=stale_pipeline_runs,
+        recommended_actions=recommended_actions,
+    )

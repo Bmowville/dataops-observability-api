@@ -75,6 +75,7 @@ Seed and inspect local sample data:
 python scripts/seed_sample_data.py
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/pipeline-runs/latest?name=orders_daily_load"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/pipelines"
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/operations-overview?stale_after_minutes=60"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/quality-checks"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/stale-pipeline-runs?max_age_minutes=60"
 ```
@@ -101,9 +102,21 @@ The container starts the FastAPI app on port `8000`. Run migrations before produ
 | POST | `/api/v1/pipeline-runs/{run_id}/quality-checks` | Add a quality check to a run |
 | GET | `/api/v1/pipeline-runs/{run_id}/quality-checks` | List quality checks for a run |
 | GET | `/api/v1/metrics/summary` | Operational summary counts |
+| GET | `/api/v1/metrics/operations-overview?stale_after_minutes=60` | Combined operator dashboard snapshot with recommended actions |
 | GET | `/api/v1/metrics/pipelines` | Pipeline health rollups grouped by name |
 | GET | `/api/v1/metrics/quality-checks` | Quality-check counts grouped by severity and status |
 | GET | `/api/v1/metrics/stale-pipeline-runs?max_age_minutes=60` | Active pipeline runs older than the configured age threshold |
+
+## Operations Overview
+
+The `/api/v1/metrics/operations-overview` endpoint combines the service's most useful operational signals into one response for dashboards or runbooks:
+
+- `service_status`: `healthy`, `degraded`, or `attention_required`
+- `summary`: total runs, run statuses, and quality-check counts
+- `pipeline_health`: latest run state and quality-check counts by pipeline name
+- `quality_checks`: severity and status rollups
+- `stale_pipeline_runs`: active runs older than the requested threshold
+- `recommended_actions`: prioritized next steps for failed checks, failed latest runs, stale active runs, and warnings
 
 ## Configuration
 
