@@ -4,6 +4,18 @@ A FastAPI service for tracking data pipeline runs, quality checks, and operation
 
 The service keeps operational metadata for data workflows in a small API surface with typed routes, database migrations, test coverage, Docker support, and CI quality gates.
 
+It is shaped as a lightweight operations layer for teams that need more than scattered logs but do not need a full observability platform. Pipelines can report run status and quality checks into the API, then operators can use the dashboard or metrics endpoints to see what needs attention first.
+
+## Product Direction
+
+Most pipeline monitoring tools stop at raw events, logs, or generic charts. This project is designed around the operator workflow:
+
+- one place to see current pipeline health
+- one response that combines run status, quality results, stale work, and recommended actions
+- a small dashboard that makes the API useful immediately after seeding sample data
+- integration-friendly endpoints for Airflow, dbt, cron jobs, GitHub Actions, or custom ETL scripts
+- a codebase small enough for teams to adapt instead of adopting a heavy platform
+
 ## Service Scope
 
 - FastAPI application structure with versioned API routes
@@ -39,8 +51,11 @@ uvicorn app.main:app --reload
 
 Open:
 
+- Dashboard: http://127.0.0.1:8000/dashboard
 - API docs: http://127.0.0.1:8000/docs
 - Health check: http://127.0.0.1:8000/health
+
+The seeded data creates a realistic operating state with a successful pipeline, a failed historical run, a stale active run, quality checks, and recommended actions.
 
 ## Run Quality Gates
 
@@ -106,6 +121,12 @@ The container starts the FastAPI app on port `8000`. Run migrations before produ
 | GET | `/api/v1/metrics/pipelines` | Pipeline health rollups grouped by name |
 | GET | `/api/v1/metrics/quality-checks` | Quality-check counts grouped by severity and status |
 | GET | `/api/v1/metrics/stale-pipeline-runs?max_age_minutes=60` | Active pipeline runs older than the configured age threshold |
+
+## Dashboard
+
+The `/dashboard` page is a read-only operator view backed by `/api/v1/metrics/operations-overview`. It surfaces the service status, summary counts, recommended actions, pipeline health, quality-check rollups, and stale active runs from the same API response that external tools can consume.
+
+Run `python scripts/seed_sample_data.py`, start the app, and open `http://127.0.0.1:8000/dashboard` to see the project with demo data.
 
 ## Operations Overview
 

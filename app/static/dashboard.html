@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DataOps Operations Dashboard</title>
+    <link rel="stylesheet" href="/static/dashboard.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">DataOps Observability API</p>
+        <h1>Operations Dashboard</h1>
+      </div>
+      <nav class="header-actions" aria-label="Dashboard actions">
+        <a class="button secondary" href="/docs">API Docs</a>
+        <button class="button" type="button" data-refresh>Refresh</button>
+      </nav>
+    </header>
+
+    <main class="dashboard-shell">
+      <section class="status-band" aria-live="polite">
+        <div>
+          <span class="label">Service status</span>
+          <strong data-service-status>Loading</strong>
+        </div>
+        <div>
+          <span class="label">Generated</span>
+          <strong data-generated-at>Waiting for data</strong>
+        </div>
+      </section>
+
+      <section class="metric-grid" aria-label="Operations summary">
+        <article class="metric-card">
+          <span class="label">Total runs</span>
+          <strong data-total-runs>0</strong>
+        </article>
+        <article class="metric-card danger">
+          <span class="label">Failed checks</span>
+          <strong data-failed-checks>0</strong>
+        </article>
+        <article class="metric-card warning">
+          <span class="label">Warnings</span>
+          <strong data-warning-checks>0</strong>
+        </article>
+        <article class="metric-card active">
+          <span class="label">Stale active runs</span>
+          <strong data-stale-runs>0</strong>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <section class="panel action-panel" aria-labelledby="actions-title">
+          <div class="panel-header">
+            <h2 id="actions-title">Recommended Actions</h2>
+            <span class="pill" data-action-count>0 open</span>
+          </div>
+          <ol class="action-list" data-actions></ol>
+        </section>
+
+        <section class="panel" aria-labelledby="pipeline-title">
+          <div class="panel-header">
+            <h2 id="pipeline-title">Pipeline Health</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pipeline</th>
+                  <th>Latest</th>
+                  <th>Runs</th>
+                  <th>Failed checks</th>
+                  <th>Warnings</th>
+                </tr>
+              </thead>
+              <tbody data-pipelines></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="quality-title">
+          <div class="panel-header">
+            <h2 id="quality-title">Quality Checks</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Severity</th>
+                  <th>Total</th>
+                  <th>Passed</th>
+                  <th>Warnings</th>
+                  <th>Failed</th>
+                </tr>
+              </thead>
+              <tbody data-quality></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="stale-title">
+          <div class="panel-header">
+            <h2 id="stale-title">Stale Active Runs</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pipeline</th>
+                  <th>Status</th>
+                  <th>Age</th>
+                  <th>Source</th>
+                </tr>
+              </thead>
+              <tbody data-stale></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/static/dashboard.js" type="module"></script>
+  </body>
+</html>
