@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -34,6 +34,26 @@ class PipelineRun(Base):
         back_populates="pipeline_run",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+
+
+class PipelineDefinition(Base):
+    __tablename__ = "pipelines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    owner: Mapped[str] = mapped_column(String(120))
+    source_system: Mapped[str] = mapped_column(String(80))
+    expected_cadence_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stale_after_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    alert_severity: Mapped[str] = mapped_column(String(20), default="high")
+    runbook_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
     )
 
 

@@ -4,10 +4,11 @@ DataOps Observability API is useful when pipeline runners report a small amount 
 
 ## Reporting Flow
 
-1. Create a pipeline run when work starts.
-2. Add one or more quality checks while the job runs or after validation finishes.
-3. Patch the pipeline run to `succeeded`, `failed`, or `canceled` when work ends.
-4. Open `/dashboard` or call `/api/v1/metrics/operations-overview` to see the operating state.
+1. Register the pipeline with an owner, cadence, stale threshold, and runbook URL.
+2. Create a pipeline run when work starts.
+3. Add one or more quality checks while the job runs or after validation finishes.
+4. Patch the pipeline run to `succeeded`, `failed`, or `canceled` when work ends.
+5. Open `/dashboard` or call `/api/v1/metrics/operations-overview` to see the operating state.
 
 ## API Key Ingestion
 
@@ -23,7 +24,40 @@ Then configure reporters with the matching client-side key and send it as `X-Dat
 $env:DATAOPS_API_KEY = "dev-ingest-key"
 ```
 
-Read-only endpoints such as `/dashboard`, `/health`, and `/api/v1/metrics/*` remain open. Only ingestion writes require the header when keys are configured.
+Read-only endpoints such as `/dashboard`, `/health`, `/api/v1/pipelines`, and `/api/v1/metrics/*` remain open. Pipeline registry writes and ingestion writes require the header when keys are configured.
+
+## Pipeline Registry
+
+Register each important workflow once so operators can see ownership and SLA context next to live run state:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/pipelines \
+  -H "Content-Type: application/json" \
+  -H "X-DataOps-API-Key: $DATAOPS_API_KEY" \
+  -d '{"name":"orders_daily_load","owner":"Data Platform","source_system":"airflow","expected_cadence_minutes":1440,"stale_after_minutes":90,"alert_severity":"high","runbook_url":"https://runbooks.example.com/orders-daily-load"}'
+```
+
+Fields:
+
+| Field | Purpose |
+| --- | --- |
+| `name` | Pipeline name used by reported runs |
+| `owner` | Team or person responsible for follow-up |
+| `source_system` | Scheduler, warehouse, CI system, or integration source |
+| `expected_cadence_minutes` | How often the pipeline is expected to run |
+| `stale_after_minutes` | Active run age that should trigger stale-run attention |
+| `alert_severity` | Default severity context for alerting and triage |
+| `runbook_url` | Operator link for incident response |
+| `is_enabled` | Whether the pipeline should participate in stale-run checks |
+
+Useful registry calls:
+
+```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/pipelines"
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/pipelines/orders_daily_load"
+```
+
+Registered stale thresholds override the fallback threshold passed to `/api/v1/metrics/stale-pipeline-runs` and `/api/v1/metrics/operations-overview`. Disabled pipelines stay visible in the registry but are ignored by stale-run detection.
 
 ## Webhook Alerts
 
@@ -179,6 +213,7 @@ For production use, store `DATAOPS_API_KEY` as a GitHub Actions secret and keep 
 
 Once pipelines report this minimal status data, the dashboard and metrics endpoints can answer operational questions without searching logs:
 
+- Who owns this pipeline, and where is the runbook?
 - Which pipelines need attention right now?
 - Which runs are stale or still active past the expected window?
 - Which quality checks are failing or warning?

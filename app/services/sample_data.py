@@ -3,13 +3,16 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models.pipeline import PipelineRun, QualityCheck
+from app.models.pipeline import PipelineDefinition, PipelineRun, QualityCheck
 from app.schemas.pipeline import SeedSampleDataSummary
 
 SAMPLE_SOURCE_SYSTEM = "sample_seed"
 
 
 def seed_sample_data(db: Session) -> SeedSampleDataSummary:
+    sample_pipeline_names = ["orders_daily_load", "inventory_snapshot"]
+    db.execute(delete(PipelineDefinition).where(PipelineDefinition.name.in_(sample_pipeline_names)))
+
     existing_run_ids = list(
         db.scalars(select(PipelineRun.id).where(PipelineRun.source_system == SAMPLE_SOURCE_SYSTEM))
     )
@@ -18,6 +21,28 @@ def seed_sample_data(db: Session) -> SeedSampleDataSummary:
         db.execute(delete(PipelineRun).where(PipelineRun.id.in_(existing_run_ids)))
 
     now = datetime.now(UTC)
+    pipelines = [
+        PipelineDefinition(
+            name="orders_daily_load",
+            owner="Data Platform",
+            source_system=SAMPLE_SOURCE_SYSTEM,
+            expected_cadence_minutes=1440,
+            stale_after_minutes=90,
+            alert_severity="high",
+            runbook_url="https://runbooks.example.com/orders-daily-load",
+        ),
+        PipelineDefinition(
+            name="inventory_snapshot",
+            owner="Inventory Ops",
+            source_system=SAMPLE_SOURCE_SYSTEM,
+            expected_cadence_minutes=60,
+            stale_after_minutes=15,
+            alert_severity="medium",
+            runbook_url="https://runbooks.example.com/inventory-snapshot",
+        ),
+    ]
+    db.add_all(pipelines)
+
     runs = [
         PipelineRun(
             name="orders_daily_load",
@@ -99,6 +124,7 @@ def seed_sample_data(db: Session) -> SeedSampleDataSummary:
     db.commit()
 
     return SeedSampleDataSummary(
+        pipelines_registered=len(pipelines),
         pipeline_runs_created=len(runs),
         quality_checks_created=len(checks),
         source_system=SAMPLE_SOURCE_SYSTEM,

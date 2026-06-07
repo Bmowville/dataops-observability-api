@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.main import app
-from app.models.pipeline import PipelineRun, QualityCheck
+from app.models.pipeline import PipelineDefinition, PipelineRun, QualityCheck
 from app.services.sample_data import seed_sample_data
 
 INGESTION_API_KEY_HEADER = "X-DataOps-API-Key"
@@ -262,12 +262,17 @@ def test_pipeline_health_rollups_group_runs_by_pipeline_name(
 
     inventory = payload[0]
     assert inventory["total_runs"] == 1
+    assert inventory["owner"] == "Inventory Ops"
+    assert inventory["stale_after_minutes"] == 15
+    assert inventory["runbook_url"] == "https://runbooks.example.com/inventory-snapshot"
     assert inventory["failed_runs"] == 0
     assert inventory["latest_status"] == "running"
     assert inventory["warning_quality_checks"] == 1
 
     orders = payload[1]
     assert orders["total_runs"] == 2
+    assert orders["owner"] == "Data Platform"
+    assert orders["stale_after_minutes"] == 90
     assert orders["failed_runs"] == 1
     assert orders["latest_status"] == "succeeded"
     assert orders["latest_records_processed"] == 1284
@@ -382,6 +387,80 @@ def test_stale_pipeline_run_metrics_return_old_active_runs(
     assert payload[1]["age_minutes"] >= 89
 
 
+def test_registered_pipeline_stale_threshold_overrides_default(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    now = datetime.now(UTC)
+    db_session.add_all(
+        [
+            PipelineDefinition(
+                name="fast_pipeline",
+                owner="Data Platform",
+                source_system="warehouse",
+                expected_cadence_minutes=30,
+                stale_after_minutes=15,
+                alert_severity="high",
+                runbook_url="https://runbooks.example.com/fast-pipeline",
+            ),
+            PipelineDefinition(
+                name="slow_pipeline",
+                owner="Finance Analytics",
+                source_system="warehouse",
+                expected_cadence_minutes=240,
+                stale_after_minutes=60,
+                alert_severity="medium",
+            ),
+            PipelineDefinition(
+                name="paused_pipeline",
+                owner="Data Platform",
+                source_system="warehouse",
+                expected_cadence_minutes=30,
+                stale_after_minutes=5,
+                alert_severity="low",
+                is_enabled=False,
+            ),
+            PipelineRun(
+                name="fast_pipeline",
+                source_system="warehouse",
+                status="running",
+                records_processed=120,
+                started_at=now - timedelta(minutes=20),
+                created_at=now - timedelta(minutes=20),
+                updated_at=now - timedelta(minutes=20),
+            ),
+            PipelineRun(
+                name="slow_pipeline",
+                source_system="warehouse",
+                status="running",
+                records_processed=120,
+                started_at=now - timedelta(minutes=20),
+                created_at=now - timedelta(minutes=20),
+                updated_at=now - timedelta(minutes=20),
+            ),
+            PipelineRun(
+                name="paused_pipeline",
+                source_system="warehouse",
+                status="running",
+                records_processed=120,
+                started_at=now - timedelta(hours=2),
+                created_at=now - timedelta(hours=2),
+                updated_at=now - timedelta(hours=2),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    response = client.get("/api/v1/metrics/stale-pipeline-runs?max_age_minutes=10")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [run["name"] for run in payload] == ["fast_pipeline"]
+    assert payload[0]["owner"] == "Data Platform"
+    assert payload[0]["stale_after_minutes"] == 15
+    assert payload[0]["runbook_url"] == "https://runbooks.example.com/fast-pipeline"
+
+
 def test_stale_pipeline_run_metrics_return_empty_list_without_old_active_runs(
     client: TestClient,
 ) -> None:
@@ -441,10 +520,14 @@ def test_seed_sample_data_replaces_prior_sample_records(db_session: Session) -> 
 
     run_count = db_session.scalar(select(func.count(PipelineRun.id)))
     check_count = db_session.scalar(select(func.count(QualityCheck.id)))
+    pipeline_count = db_session.scalar(select(func.count(PipelineDefinition.id)))
 
+    assert first.pipelines_registered == 2
     assert first.pipeline_runs_created == 3
     assert first.quality_checks_created == 4
+    assert second.pipelines_registered == 2
     assert second.pipeline_runs_created == 3
     assert second.quality_checks_created == 4
+    assert pipeline_count == 2
     assert run_count == 3
     assert check_count == 4

@@ -30,6 +30,43 @@ class AlertDeliveryStatus(StrEnum):
     failed = "failed"
 
 
+class PipelineDefinitionCreate(BaseModel):
+    name: str = Field(min_length=3, max_length=120)
+    owner: str = Field(min_length=2, max_length=120)
+    source_system: str = Field(min_length=2, max_length=80)
+    expected_cadence_minutes: int | None = Field(default=None, ge=1, le=10080)
+    stale_after_minutes: int = Field(default=60, ge=1, le=1440)
+    alert_severity: QualityCheckSeverity = QualityCheckSeverity.high
+    runbook_url: str | None = Field(default=None, max_length=500)
+    is_enabled: bool = True
+
+
+class PipelineDefinitionUpdate(BaseModel):
+    owner: str | None = Field(default=None, min_length=2, max_length=120)
+    source_system: str | None = Field(default=None, min_length=2, max_length=80)
+    expected_cadence_minutes: int | None = Field(default=None, ge=1, le=10080)
+    stale_after_minutes: int | None = Field(default=None, ge=1, le=1440)
+    alert_severity: QualityCheckSeverity | None = None
+    runbook_url: str | None = Field(default=None, max_length=500)
+    is_enabled: bool | None = None
+
+
+class PipelineDefinitionRead(BaseModel):
+    id: int
+    name: str
+    owner: str
+    source_system: str
+    expected_cadence_minutes: int | None
+    stale_after_minutes: int
+    alert_severity: QualityCheckSeverity
+    runbook_url: str | None
+    is_enabled: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class HealthResponse(BaseModel):
     status: str
     app_name: str
@@ -123,6 +160,14 @@ class MetricsSummary(BaseModel):
 
 class PipelineHealthRollup(BaseModel):
     name: str
+    owner: str | None = None
+    source_system: str | None = None
+    expected_cadence_minutes: int | None = None
+    stale_after_minutes: int | None = None
+    alert_severity: QualityCheckSeverity | None = None
+    runbook_url: str | None = None
+    is_registered: bool = False
+    is_enabled: bool = True
     total_runs: int
     failed_runs: int
     latest_run_id: int
@@ -138,6 +183,9 @@ class StalePipelineRunMetric(BaseModel):
     id: int
     name: str
     source_system: str
+    owner: str | None = None
+    stale_after_minutes: int
+    runbook_url: str | None = None
     status: PipelineRunStatus
     age_minutes: int
     started_at: datetime | None
@@ -170,6 +218,7 @@ class OperationsOverview(BaseModel):
 
 
 class SeedSampleDataSummary(BaseModel):
+    pipelines_registered: int
     pipeline_runs_created: int
     quality_checks_created: int
     source_system: str
