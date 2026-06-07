@@ -15,6 +15,7 @@ Most pipeline monitoring tools stop at raw events, logs, or generic charts. This
 - a small dashboard that makes the API useful immediately after seeding sample data
 - integration-friendly endpoints for Airflow, dbt, cron jobs, GitHub Actions, or custom ETL scripts
 - optional API-key protection for ingestion writes when the service is exposed outside a local machine
+- webhook alerts for failed pipeline runs and quality checks that need operator attention
 - a codebase small enough for teams to adapt instead of adopting a heavy platform
 
 See [docs/integrations.md](docs/integrations.md) for copy-paste examples that report pipeline events from Python jobs, GitHub Actions, Airflow, and dbt.
@@ -72,6 +73,8 @@ The API is designed to receive events from pipeline tools instead of replacing t
 Full setup notes live in [docs/integrations.md](docs/integrations.md).
 
 Set `INGESTION_API_KEYS` to require external reporters to send `X-DataOps-API-Key` on write requests. Read-only dashboard and metrics endpoints stay open so operators can inspect service health without sharing ingestion credentials.
+
+Set `ALERT_WEBHOOK_URLS` to send operational alerts to Slack-compatible bridges, incident tooling, or custom automation when runs fail/cancel or quality checks warn/fail.
 
 ## Run Quality Gates
 
@@ -168,6 +171,10 @@ Settings are loaded from environment variables.
 | `DATABASE_URL` | `sqlite:///./dataops_observability.db` | SQLAlchemy database URL |
 | `API_PREFIX` | `/api/v1` | Versioned API prefix |
 | `INGESTION_API_KEYS` | empty | Comma-separated keys accepted by write/ingestion endpoints. When empty, local writes are open. |
+| `PUBLIC_BASE_URL` | `http://127.0.0.1:8000` | Base URL used in generated dashboard and API links. |
+| `ALERT_WEBHOOK_URLS` | empty | Comma-separated webhook URLs that receive operational alerts. |
+| `ALERT_WEBHOOK_SECRET` | empty | Optional shared secret sent as `X-DataOps-Webhook-Secret` on alert deliveries. |
+| `ALERT_WEBHOOK_TIMEOUT_SECONDS` | `5` | Timeout for each outbound webhook delivery. |
 
 When `INGESTION_API_KEYS` is set, these write endpoints require `X-DataOps-API-Key`:
 
@@ -176,6 +183,27 @@ When `INGESTION_API_KEYS` is set, these write endpoints require `X-DataOps-API-K
 - `POST /api/v1/pipeline-runs/{run_id}/quality-checks`
 
 Use different keys during rotation by setting a comma-separated value such as `INGESTION_API_KEYS=old-key,new-key`. Store real keys in your deployment secret manager, CI secrets, or local `.env` file rather than committing them.
+
+## Webhook Alerts
+
+When `ALERT_WEBHOOK_URLS` is configured, the API sends background webhook alerts for events that normally need human attention:
+
+- pipeline run status changes to `failed`
+- pipeline run status changes to `canceled`
+- quality check status is `failed`
+- quality check status is `warning`
+
+Successful runs and passed quality checks do not send alerts. This keeps notification volume focused on work that needs follow-up.
+
+Example configuration:
+
+```powershell
+$env:PUBLIC_BASE_URL = "https://dataops.example.com"
+$env:ALERT_WEBHOOK_URLS = "https://hooks.example.com/dataops,https://backup.example.com/dataops"
+$env:ALERT_WEBHOOK_SECRET = "shared-secret"
+```
+
+Alert payloads include `event_type`, `severity`, `message`, the affected pipeline run, optional quality-check details, and links back to the dashboard, run detail endpoint, and timeline endpoint.
 
 ## Notes
 
