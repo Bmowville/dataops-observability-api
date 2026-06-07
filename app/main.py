@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.api.alerts import router as alerts_router
 from app.api.health import router as health_router
 from app.api.pipeline_runs import router as pipeline_runs_router
 from app.core.config import settings
@@ -19,6 +20,7 @@ def create_app() -> FastAPI:
         description="Track pipeline runs, quality checks, and data operations health.",
     )
     app.include_router(health_router)
+    app.include_router(alerts_router, prefix=settings.api_prefix)
     app.include_router(pipeline_runs_router, prefix=settings.api_prefix)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

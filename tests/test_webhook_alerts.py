@@ -29,15 +29,28 @@ def test_failed_pipeline_run_sends_webhook_alert(
     client: TestClient,
     monkeypatch: Any,
 ) -> None:
-    deliveries: list[tuple[tuple[str, ...], dict[str, object], str, float]] = []
+    deliveries: list[
+        tuple[tuple[str, ...], dict[str, object], str, float, int | None, int | None]
+    ] = []
 
     def fake_send_webhook_alerts(
         webhook_urls: tuple[str, ...],
         payload: dict[str, object],
         shared_secret: str,
         timeout_seconds: float,
+        pipeline_run_id: int | None,
+        quality_check_id: int | None,
     ) -> None:
-        deliveries.append((webhook_urls, payload, shared_secret, timeout_seconds))
+        deliveries.append(
+            (
+                webhook_urls,
+                payload,
+                shared_secret,
+                timeout_seconds,
+                pipeline_run_id,
+                quality_check_id,
+            )
+        )
 
     monkeypatch.setattr(webhook_alerts, "send_webhook_alerts", fake_send_webhook_alerts)
     override_alert_settings(
@@ -55,10 +68,14 @@ def test_failed_pipeline_run_sends_webhook_alert(
 
     assert response.status_code == 200
     assert len(deliveries) == 1
-    webhook_urls, payload, shared_secret, timeout_seconds = deliveries[0]
+    webhook_urls, payload, shared_secret, timeout_seconds, pipeline_run_id, quality_check_id = (
+        deliveries[0]
+    )
     assert webhook_urls == ("https://alerts.example/dataops", "https://backup.example/dataops")
     assert shared_secret == "local-secret"
     assert timeout_seconds == 2.5
+    assert pipeline_run_id == created["id"]
+    assert quality_check_id is None
     assert payload["event_type"] == "pipeline_run_failed"
     assert payload["severity"] == "critical"
     assert payload["message"] == "Pipeline run daily_orders_load is failed."
@@ -87,6 +104,8 @@ def test_warning_quality_check_sends_webhook_alert(
         payload: dict[str, object],
         shared_secret: str,
         timeout_seconds: float,
+        pipeline_run_id: int | None,
+        quality_check_id: int | None,
     ) -> None:
         deliveries.append(payload)
 
@@ -131,6 +150,8 @@ def test_non_actionable_events_do_not_send_webhook_alert(
         payload: dict[str, object],
         shared_secret: str,
         timeout_seconds: float,
+        pipeline_run_id: int | None,
+        quality_check_id: int | None,
     ) -> None:
         deliveries.append(payload)
 
@@ -165,6 +186,8 @@ def test_failed_pipeline_run_without_configured_webhooks_does_not_deliver(
         payload: dict[str, object],
         shared_secret: str,
         timeout_seconds: float,
+        pipeline_run_id: int | None,
+        quality_check_id: int | None,
     ) -> None:
         raise AssertionError("No delivery should be queued without webhook URLs")
 

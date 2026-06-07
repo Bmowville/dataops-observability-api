@@ -10,9 +10,9 @@ from app.core.config import Settings, get_settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models import PipelineRun, QualityCheck
+from app.models import AlertDelivery, PipelineRun, QualityCheck
 
-_ = (PipelineRun, QualityCheck)
+_ = (AlertDelivery, PipelineRun, QualityCheck)
 
 
 @pytest.fixture()

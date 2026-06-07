@@ -25,6 +25,11 @@ class QualityCheckSeverity(StrEnum):
     critical = "critical"
 
 
+class AlertDeliveryStatus(StrEnum):
+    succeeded = "succeeded"
+    failed = "failed"
+
+
 class HealthResponse(BaseModel):
     status: str
     app_name: str
@@ -66,6 +71,20 @@ class QualityCheckRead(BaseModel):
     expected_value: str | None
     observed_value: str | None
     details: str | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AlertDeliveryRead(BaseModel):
+    id: int
+    event_type: str
+    pipeline_run_id: int | None
+    quality_check_id: int | None
+    receiver: str
+    status: AlertDeliveryStatus
+    http_status_code: int | None
+    error_message: str | None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

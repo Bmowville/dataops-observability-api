@@ -2,15 +2,20 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 from fastapi import BackgroundTasks
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.db.session import SessionLocal
 from app.models.pipeline import PipelineRun, QualityCheck
-from app.schemas.pipeline import PipelineRunStatus, QualityCheckStatus
+from app.schemas.pipeline import AlertDeliveryStatus, PipelineRunStatus, QualityCheckStatus
+from app.services.alert_deliveries import create_alert_delivery
 
 WEBHOOK_SECRET_HEADER = "X-DataOps-Webhook-Secret"
 WEBHOOK_USER_AGENT = "dataops-observability-api/0.1"
@@ -24,6 +29,7 @@ ACTIONABLE_CHECK_STATUSES = {
 }
 
 AlertPayload = dict[str, object]
+SessionFactory = Callable[[], Session]
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +54,8 @@ def queue_pipeline_run_alert(
         background_tasks,
         settings,
         build_pipeline_run_alert_payload(run, settings),
+        pipeline_run_id=run.id,
+        quality_check_id=None,
     )
 
 
@@ -64,6 +72,8 @@ def queue_quality_check_alert(
         background_tasks,
         settings,
         build_quality_check_alert_payload(run, check, settings),
+        pipeline_run_id=run.id,
+        quality_check_id=check.id,
     )
 
 
@@ -71,6 +81,9 @@ def queue_webhook_alert(
     background_tasks: BackgroundTasks,
     settings: Settings,
     payload: AlertPayload,
+    *,
+    pipeline_run_id: int | None,
+    quality_check_id: int | None,
 ) -> None:
     webhook_urls = get_configured_alert_webhook_urls(settings)
     if not webhook_urls:
@@ -82,6 +95,8 @@ def queue_webhook_alert(
         payload,
         settings.alert_webhook_secret,
         settings.alert_webhook_timeout_seconds,
+        pipeline_run_id,
+        quality_check_id,
     )
 
 
@@ -165,9 +180,29 @@ def send_webhook_alerts(
     payload: AlertPayload,
     shared_secret: str,
     timeout_seconds: float,
+    pipeline_run_id: int | None,
+    quality_check_id: int | None,
+    session_factory: SessionFactory = SessionLocal,
 ) -> None:
-    for webhook_url in webhook_urls:
-        send_webhook_alert(webhook_url, payload, shared_secret, timeout_seconds)
+    event_type = str(payload.get("event_type", "alert"))
+    with session_factory() as db:
+        for webhook_url in webhook_urls:
+            delivery_status, http_status_code, error_message = send_webhook_alert(
+                webhook_url,
+                payload,
+                shared_secret,
+                timeout_seconds,
+            )
+            create_alert_delivery(
+                db,
+                event_type=event_type,
+                pipeline_run_id=pipeline_run_id,
+                quality_check_id=quality_check_id,
+                receiver=sanitize_receiver(webhook_url),
+                status=delivery_status,
+                http_status_code=http_status_code,
+                error_message=error_message,
+            )
 
 
 def send_webhook_alert(
@@ -175,7 +210,7 @@ def send_webhook_alert(
     payload: AlertPayload,
     shared_secret: str,
     timeout_seconds: float,
-) -> None:
+) -> tuple[AlertDeliveryStatus, int | None, str | None]:
     data = json.dumps(payload).encode("utf-8")
     headers = {
         "Accept": "application/json",
@@ -192,7 +227,25 @@ def send_webhook_alert(
         method="POST",
     )
     try:
-        with urlopen(request, timeout=timeout_seconds):
-            return
-    except (HTTPError, URLError, TimeoutError, OSError) as error:
+        with urlopen(request, timeout=timeout_seconds) as response:
+            return AlertDeliveryStatus.succeeded, response.getcode(), None
+    except HTTPError as error:
         logger.warning("Webhook alert delivery failed for %s: %s", webhook_url, error)
+        return AlertDeliveryStatus.failed, error.code, truncate_error(error)
+    except (URLError, TimeoutError, OSError) as error:
+        logger.warning("Webhook alert delivery failed for %s: %s", webhook_url, error)
+        return AlertDeliveryStatus.failed, None, truncate_error(error)
+
+
+def sanitize_receiver(webhook_url: str) -> str:
+    parsed = urlsplit(webhook_url)
+    if not parsed.netloc:
+        return webhook_url[:500]
+
+    host = parsed.netloc.rsplit("@", maxsplit=1)[-1]
+    path = parsed.path or "/"
+    return f"{parsed.scheme}://{host}{path}"[:500]
+
+
+def truncate_error(error: BaseException) -> str:
+    return str(error)[:500]
