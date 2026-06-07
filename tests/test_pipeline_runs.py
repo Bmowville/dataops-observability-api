@@ -113,6 +113,31 @@ def test_metrics_summary_counts_runs_and_checks(client: TestClient) -> None:
     assert payload["warning_quality_checks"] == 0
 
 
+def test_operations_overview_returns_operator_snapshot(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    seed_sample_data(db_session)
+
+    response = client.get("/api/v1/metrics/operations-overview?stale_after_minutes=10")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["service_status"] == "attention_required"
+    assert payload["summary"]["total_runs"] == 3
+    assert [rollup["name"] for rollup in payload["pipeline_health"]] == [
+        "inventory_snapshot",
+        "orders_daily_load",
+    ]
+    assert payload["quality_checks"][0]["severity"] == "critical"
+    assert [run["name"] for run in payload["stale_pipeline_runs"]] == ["inventory_snapshot"]
+    assert [action["priority"] for action in payload["recommended_actions"]] == [
+        "critical",
+        "high",
+        "medium",
+    ]
+
+
 def test_pipeline_health_rollups_group_runs_by_pipeline_name(
     client: TestClient,
     db_session: Session,

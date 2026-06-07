@@ -134,6 +134,22 @@ class QualityCheckSeverityRollup(BaseModel):
     failed_checks: int
 
 
+class RecommendedAction(BaseModel):
+    priority: str
+    title: str
+    detail: str
+
+
+class OperationsOverview(BaseModel):
+    generated_at: datetime
+    service_status: str
+    summary: MetricsSummary
+    pipeline_health: list[PipelineHealthRollup]
+    quality_checks: list[QualityCheckSeverityRollup]
+    stale_pipeline_runs: list[StalePipelineRunMetric]
+    recommended_actions: list[RecommendedAction]
+
+
 class SeedSampleDataSummary(BaseModel):
     pipeline_runs_created: int
     quality_checks_created: int
