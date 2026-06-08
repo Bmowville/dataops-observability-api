@@ -6,6 +6,8 @@ The service keeps operational metadata for data workflows in a small API surface
 
 It is shaped as a lightweight operations layer for teams that need more than scattered logs but do not need a full observability platform. Pipelines can report run status and quality checks into the API, then operators can use the dashboard or metrics endpoints to see what needs attention first.
 
+![DataOps Operations Dashboard](docs/assets/dataops-dashboard.png)
+
 ## Product Direction
 
 Most pipeline monitoring tools stop at raw events, logs, or generic charts. This project is designed around the operator workflow:
