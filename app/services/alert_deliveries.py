@@ -36,12 +36,20 @@ def list_alert_deliveries(
     status: AlertDeliveryStatus | None = None,
     limit: int = 100,
 ) -> list[AlertDelivery]:
-    statement = select(AlertDelivery).order_by(AlertDelivery.created_at.desc()).limit(limit)
+    statement = (
+        select(AlertDelivery)
+        .order_by(AlertDelivery.created_at.desc(), AlertDelivery.id.desc())
+        .limit(limit)
+    )
     if status is not None:
         statement = statement.where(AlertDelivery.status == status.value)
     return list(db.scalars(statement).all())
 
 
 def get_latest_alert_delivery(db: Session) -> AlertDelivery | None:
-    statement = select(AlertDelivery).order_by(AlertDelivery.created_at.desc()).limit(1)
+    statement = (
+        select(AlertDelivery)
+        .order_by(AlertDelivery.created_at.desc(), AlertDelivery.id.desc())
+        .limit(1)
+    )
     return db.scalar(statement)
