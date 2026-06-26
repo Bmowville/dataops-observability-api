@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import Select, func, select
@@ -30,6 +31,21 @@ ACTIVE_RUN_STATUSES = {
     PipelineRunStatus.queued.value,
     PipelineRunStatus.running.value,
 }
+
+
+def _prometheus_label(value: object) -> str:
+    return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+
+
+def _metric_line(name: str, value: int, labels: Mapping[str, object] | None = None) -> str:
+    if not labels:
+        return f"{name} {value}"
+
+    label_text = ",".join(
+        f'{label_name}="{_prometheus_label(label_value)}"'
+        for label_name, label_value in labels.items()
+    )
+    return f"{name}{{{label_text}}} {value}"
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -226,6 +242,91 @@ def get_metrics_summary(db: Session) -> MetricsSummary:
         failed_quality_checks=int(failed_checks),
         warning_quality_checks=int(warning_checks),
     )
+
+
+def render_prometheus_metrics(overview: OperationsOverview) -> str:
+    lines = [
+        "# HELP dataops_pipeline_runs_total Total pipeline runs recorded by status.",
+        "# TYPE dataops_pipeline_runs_total counter",
+    ]
+    for status, count in sorted(overview.summary.runs_by_status.items()):
+        lines.append(_metric_line("dataops_pipeline_runs_total", count, {"status": status}))
+
+    lines.extend(
+        [
+            "# HELP dataops_quality_checks_failed_total Total failed quality checks.",
+            "# TYPE dataops_quality_checks_failed_total counter",
+            _metric_line(
+                "dataops_quality_checks_failed_total",
+                overview.summary.failed_quality_checks,
+            ),
+            "# HELP dataops_quality_checks_warning_total Total warning quality checks.",
+            "# TYPE dataops_quality_checks_warning_total counter",
+            _metric_line(
+                "dataops_quality_checks_warning_total",
+                overview.summary.warning_quality_checks,
+            ),
+            "# HELP dataops_stale_pipeline_runs Active pipeline runs older than threshold.",
+            "# TYPE dataops_stale_pipeline_runs gauge",
+            _metric_line("dataops_stale_pipeline_runs", len(overview.stale_pipeline_runs)),
+            "# HELP dataops_recommended_actions Recommended operator actions by priority.",
+            "# TYPE dataops_recommended_actions gauge",
+        ]
+    )
+
+    action_counts: dict[str, int] = {}
+    for action in overview.recommended_actions:
+        action_counts[action.priority] = action_counts.get(action.priority, 0) + 1
+    for priority, count in sorted(action_counts.items()):
+        lines.append(
+            _metric_line("dataops_recommended_actions", count, {"priority": priority})
+        )
+
+    lines.extend(
+        [
+            "# HELP dataops_pipeline_latest_status Latest run status by pipeline.",
+            "# TYPE dataops_pipeline_latest_status gauge",
+            "# HELP dataops_pipeline_failed_runs_total Failed pipeline runs by pipeline.",
+            "# TYPE dataops_pipeline_failed_runs_total counter",
+            "# HELP dataops_pipeline_failed_quality_checks_total Failed checks by pipeline.",
+            "# TYPE dataops_pipeline_failed_quality_checks_total counter",
+            "# HELP dataops_pipeline_warning_quality_checks_total Warning checks by pipeline.",
+            "# TYPE dataops_pipeline_warning_quality_checks_total counter",
+        ]
+    )
+    for rollup in overview.pipeline_health:
+        labels = {
+            "pipeline": rollup.name,
+            "status": rollup.latest_status.value,
+            "registered": str(rollup.is_registered).lower(),
+            "enabled": str(rollup.is_enabled).lower(),
+        }
+        if rollup.owner is not None:
+            labels["owner"] = rollup.owner
+        lines.append(_metric_line("dataops_pipeline_latest_status", 1, labels))
+        lines.append(
+            _metric_line(
+                "dataops_pipeline_failed_runs_total",
+                rollup.failed_runs,
+                {"pipeline": rollup.name},
+            )
+        )
+        lines.append(
+            _metric_line(
+                "dataops_pipeline_failed_quality_checks_total",
+                rollup.failed_quality_checks,
+                {"pipeline": rollup.name},
+            )
+        )
+        lines.append(
+            _metric_line(
+                "dataops_pipeline_warning_quality_checks_total",
+                rollup.warning_quality_checks,
+                {"pipeline": rollup.name},
+            )
+        )
+
+    return "\n".join(lines) + "\n"
 
 
 def get_pipeline_health_rollups(db: Session) -> list[PipelineHealthRollup]:

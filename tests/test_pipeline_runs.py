@@ -248,6 +248,25 @@ def test_operations_overview_returns_operator_snapshot(
     ]
 
 
+def test_prometheus_metrics_exposes_operator_snapshot(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    seed_sample_data(db_session)
+
+    response = client.get("/api/v1/metrics/prometheus?stale_after_minutes=10")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/plain")
+    body = response.text
+    assert "# TYPE dataops_pipeline_runs_total counter" in body
+    assert 'dataops_pipeline_runs_total{status="failed"} 1' in body
+    assert "dataops_quality_checks_failed_total 1" in body
+    assert "dataops_stale_pipeline_runs 1" in body
+    assert 'dataops_recommended_actions{priority="critical"} 1' in body
+    assert 'dataops_pipeline_latest_status{pipeline="orders_daily_load"' in body
+
+
 def test_pipeline_health_rollups_group_runs_by_pipeline_name(
     client: TestClient,
     db_session: Session,

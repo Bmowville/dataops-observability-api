@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -34,6 +34,7 @@ from app.services.pipeline_runs import (
     get_stale_pipeline_run_metrics,
     list_pipeline_runs,
     list_quality_checks,
+    render_prometheus_metrics,
     update_pipeline_run,
 )
 from app.services.webhook_alerts import queue_pipeline_run_alert, queue_quality_check_alert
@@ -154,6 +155,18 @@ def operations_overview(
     stale_after_minutes: Annotated[int, Query(ge=1, le=1440)] = 60,
 ) -> OperationsOverview:
     return get_operations_overview(db, stale_after_minutes=stale_after_minutes)
+
+
+@router.get("/metrics/prometheus", response_class=Response)
+def prometheus_metrics(
+    db: Annotated[Session, Depends(get_db)],
+    stale_after_minutes: Annotated[int, Query(ge=1, le=1440)] = 60,
+) -> Response:
+    overview = get_operations_overview(db, stale_after_minutes=stale_after_minutes)
+    return Response(
+        content=render_prometheus_metrics(overview),
+        media_type="text/plain; version=0.0.4",
+    )
 
 
 @router.get("/metrics/pipelines", response_model=list[PipelineHealthRollup])

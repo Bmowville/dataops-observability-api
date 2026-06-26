@@ -162,6 +162,7 @@ The container starts the FastAPI app on port `8000`. Run migrations before produ
 | GET | `/api/v1/pipeline-runs/{run_id}/quality-checks` | List quality checks for a run |
 | GET | `/api/v1/metrics/summary` | Operational summary counts |
 | GET | `/api/v1/metrics/operations-overview?stale_after_minutes=60` | Combined operator dashboard snapshot with recommended actions |
+| GET | `/api/v1/metrics/prometheus?stale_after_minutes=60` | Prometheus-style text metrics for scraper integrations |
 | GET | `/api/v1/metrics/pipelines` | Pipeline health rollups grouped by name |
 | GET | `/api/v1/metrics/quality-checks` | Quality-check counts grouped by severity and status |
 | GET | `/api/v1/metrics/stale-pipeline-runs?max_age_minutes=60` | Active pipeline runs older than the configured age threshold |
