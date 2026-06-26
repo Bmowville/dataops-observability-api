@@ -3,14 +3,19 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models.pipeline import PipelineDefinition, PipelineRun, QualityCheck
-from app.schemas.pipeline import SeedSampleDataSummary
+from app.models.pipeline import AlertDelivery, PipelineDefinition, PipelineRun, QualityCheck
+from app.schemas.pipeline import AlertDeliveryStatus, SeedSampleDataSummary
 
 SAMPLE_SOURCE_SYSTEM = "sample_seed"
+SAMPLE_ALERT_RECEIVERS = (
+    "https://alerts.example.com/dataops",
+    "https://backup-alerts.example.com/dataops",
+)
 
 
 def seed_sample_data(db: Session) -> SeedSampleDataSummary:
     sample_pipeline_names = ["orders_daily_load", "inventory_snapshot"]
+    db.execute(delete(AlertDelivery).where(AlertDelivery.receiver.in_(SAMPLE_ALERT_RECEIVERS)))
     db.execute(delete(PipelineDefinition).where(PipelineDefinition.name.in_(sample_pipeline_names)))
 
     existing_run_ids = list(
@@ -121,11 +126,36 @@ def seed_sample_data(db: Session) -> SeedSampleDataSummary:
         ),
     ]
     db.add_all(checks)
+    db.flush()
+
+    alert_deliveries = [
+        AlertDelivery(
+            event_type="pipeline_run_failed",
+            pipeline_run_id=runs[1].id,
+            quality_check_id=checks[2].id,
+            receiver=SAMPLE_ALERT_RECEIVERS[0],
+            status=AlertDeliveryStatus.succeeded.value,
+            http_status_code=202,
+            created_at=now - timedelta(days=1, hours=3, minutes=1),
+        ),
+        AlertDelivery(
+            event_type="quality_check_warning",
+            pipeline_run_id=runs[2].id,
+            quality_check_id=checks[3].id,
+            receiver=SAMPLE_ALERT_RECEIVERS[1],
+            status=AlertDeliveryStatus.failed.value,
+            http_status_code=503,
+            error_message="Webhook receiver returned 503 Service Unavailable",
+            created_at=now - timedelta(minutes=11),
+        ),
+    ]
+    db.add_all(alert_deliveries)
     db.commit()
 
     return SeedSampleDataSummary(
         pipelines_registered=len(pipelines),
         pipeline_runs_created=len(runs),
         quality_checks_created=len(checks),
+        alert_deliveries_created=len(alert_deliveries),
         source_system=SAMPLE_SOURCE_SYSTEM,
     )

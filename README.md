@@ -24,6 +24,8 @@ Most pipeline monitoring tools stop at raw events, logs, or generic charts. This
 
 See [docs/integrations.md](docs/integrations.md) for copy-paste examples that report pipeline events from Python jobs, GitHub Actions, Airflow, and dbt.
 
+See [docs/operating.md](docs/operating.md) for self-hosted Postgres operation, API-key setup, webhook configuration, backups, and upgrade notes.
+
 ## Service Scope
 
 - FastAPI application structure with versioned API routes
@@ -34,7 +36,7 @@ See [docs/integrations.md](docs/integrations.md) for copy-paste examples that re
 - Health checks with database connectivity
 - Pytest tests using dependency overrides and isolated SQLite state
 - Ruff, mypy, and GitHub Actions CI
-- Dockerfile and Compose setup for local service runs
+- Dockerfile and Compose setup for self-hosted Postgres service runs
 
 ## Domain
 
@@ -53,8 +55,7 @@ python -m venv .venv
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 Copy-Item .env.example .env
-alembic upgrade head
-python scripts/seed_sample_data.py
+python scripts/demo_setup.py
 uvicorn app.main:app --reload
 ```
 
@@ -64,7 +65,9 @@ Open:
 - API docs: http://127.0.0.1:8000/docs
 - Health check: http://127.0.0.1:8000/health
 
-The seeded data creates a realistic operating state with registered pipeline ownership, a successful pipeline, a failed historical run, a stale active run, quality checks, and recommended actions.
+The demo setup runs migrations and reseeds a realistic operating state with registered pipeline ownership, a successful pipeline, a failed historical run, a stale active run, quality checks, recommended actions, and recent alert delivery attempts.
+
+Re-run `python scripts/demo_setup.py` any time you want to reset the local demo data back to the same inspectable state.
 
 ## Integrations
 
@@ -91,7 +94,7 @@ Webhook delivery attempts are persisted and exposed through `/api/v1/alerts/deli
 ruff check .
 mypy app
 alembic upgrade head
-pytest
+python -m pytest
 ```
 
 ## Example Requests
@@ -126,13 +129,14 @@ curl -X POST http://127.0.0.1:8000/api/v1/pipeline-runs/1/quality-checks \
 Seed and inspect local sample data:
 
 ```powershell
-python scripts/seed_sample_data.py
+python scripts/demo_setup.py
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/pipelines"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/pipeline-runs/latest?name=orders_daily_load"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/pipelines"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/operations-overview?stale_after_minutes=60"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/quality-checks"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/stale-pipeline-runs?max_age_minutes=60"
+Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries?limit=5"
 ```
 
 ## Docker
@@ -141,7 +145,9 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/stale-pipeline-runs?max_
 docker compose up --build
 ```
 
-The container starts the FastAPI app on port `8000`. Run migrations before production deployment.
+Compose starts Postgres plus the FastAPI app on port `8000`. The API waits for Postgres and runs Alembic migrations before Uvicorn starts. Configure `.env` before exposing the service, especially `POSTGRES_PASSWORD`, `INGESTION_API_KEYS`, `PUBLIC_BASE_URL`, and webhook settings.
+
+For operational setup, backup, restore, and upgrade commands, see [docs/operating.md](docs/operating.md).
 
 ## API Surface
 
@@ -173,7 +179,7 @@ The container starts the FastAPI app on port `8000`. Run migrations before produ
 
 The `/dashboard` page is a read-only operator view backed by `/api/v1/metrics/operations-overview` and `/api/v1/alerts/deliveries`. It surfaces the service status, summary counts, recommended actions, pipeline ownership, cadence, runbook links, quality-check rollups, stale active runs, and recent alert delivery results.
 
-Run `python scripts/seed_sample_data.py`, start the app, and open `http://127.0.0.1:8000/dashboard` to see the project with demo data.
+Run `python scripts/demo_setup.py`, start the app, and open `http://127.0.0.1:8000/dashboard` to see the project with demo data.
 
 ## Operations Overview
 
@@ -196,11 +202,18 @@ Settings are loaded from environment variables.
 | `ENVIRONMENT` | `local` | Environment label returned by health checks |
 | `DATABASE_URL` | `sqlite:///./dataops_observability.db` | SQLAlchemy database URL |
 | `API_PREFIX` | `/api/v1` | Versioned API prefix |
+| `RUN_MIGRATIONS_ON_STARTUP` | `false` | Run Alembic migrations before starting the API process. Compose enables this for the API container. |
+| `SERVER_HOST` | `0.0.0.0` | Host interface used by `scripts/start_api.py`. |
+| `SERVER_PORT` | `8000` | Port used by `scripts/start_api.py`. |
+| `SERVER_RELOAD` | `false` | Enable Uvicorn reload when starting through `scripts/start_api.py`. Keep disabled outside local development. |
 | `INGESTION_API_KEYS` | empty | Comma-separated keys accepted by write/ingestion endpoints. When empty, local writes are open. |
 | `PUBLIC_BASE_URL` | `http://127.0.0.1:8000` | Base URL used in generated dashboard and API links. |
 | `ALERT_WEBHOOK_URLS` | empty | Comma-separated webhook URLs that receive operational alerts. |
 | `ALERT_WEBHOOK_SECRET` | empty | Optional shared secret sent as `X-DataOps-Webhook-Secret` on alert deliveries. |
 | `ALERT_WEBHOOK_TIMEOUT_SECONDS` | `5` | Timeout for each outbound webhook delivery. |
+| `POSTGRES_DB` | `dataops_observability` | Database name used by Docker Compose Postgres. |
+| `POSTGRES_USER` | `dataops` | Database user used by Docker Compose Postgres. |
+| `POSTGRES_PASSWORD` | `change-this-local-password` | Database password used by Docker Compose Postgres. Change before exposing the service. |
 
 When `INGESTION_API_KEYS` is set, these write endpoints require `X-DataOps-API-Key`:
 
@@ -243,4 +256,4 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries/latest"
 
 ## Notes
 
-SQLite is the default for local development. The SQLAlchemy and Alembic setup is structured so the service can be moved to Postgres by changing `DATABASE_URL` and adding the relevant deployment configuration.
+SQLite is the default for local Python development. Docker Compose provides the recommended self-hosted Postgres path, including database health checks and migration-aware API startup.

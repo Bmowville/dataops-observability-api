@@ -1,11 +1,39 @@
 services:
   api:
     build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: python scripts/start_api.py
     environment:
       APP_NAME: DataOps Observability API
-      ENVIRONMENT: local
-      DATABASE_URL: sqlite:///./dataops_observability.db
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-dataops}:${POSTGRES_PASSWORD:-dataops_dev_password}@db:5432/${POSTGRES_DB:-dataops_observability}
       API_PREFIX: /api/v1
+      RUN_MIGRATIONS_ON_STARTUP: "true"
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 8000
+      INGESTION_API_KEYS: ${INGESTION_API_KEYS:-local-dev-key}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://127.0.0.1:8000}
+      ALERT_WEBHOOK_URLS: ${ALERT_WEBHOOK_URLS:-}
+      ALERT_WEBHOOK_SECRET: ${ALERT_WEBHOOK_SECRET:-}
+      ALERT_WEBHOOK_TIMEOUT_SECONDS: ${ALERT_WEBHOOK_TIMEOUT_SECONDS:-5}
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8000:8000"
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dataops_observability}
+      POSTGRES_USER: ${POSTGRES_USER:-dataops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dataops_dev_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dataops} -d ${POSTGRES_DB:-dataops_observability}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

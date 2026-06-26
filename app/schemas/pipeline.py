@@ -221,4 +221,5 @@ class SeedSampleDataSummary(BaseModel):
     pipelines_registered: int
     pipeline_runs_created: int
     quality_checks_created: int
+    alert_deliveries_created: int
     source_system: str
