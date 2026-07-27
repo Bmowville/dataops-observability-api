@@ -233,7 +233,9 @@ def test_webhook_delivery_uses_original_url_but_logs_only_sanitized_receiver(
     assert status == AlertDeliveryStatus.failed
     assert http_status is None
     assert error_message == "URLError: webhook delivery failed"
-    assert "https://hooks.example:8443" in caplog.text
+    assert caplog.messages == [
+        "Webhook alert delivery failed for https://hooks.example:8443 (URLError)"
+    ]
     for secret_value in (
         "webhook-user",
         "webhook-password",
@@ -242,7 +244,6 @@ def test_webhook_delivery_uses_original_url_but_logs_only_sanitized_receiver(
         "query-secret",
         "fragment-secret",
     ):
-        assert secret_value not in caplog.text
         assert secret_value not in error_message
 
 
