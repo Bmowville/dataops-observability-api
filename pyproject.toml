@@ -50,4 +50,20 @@ exclude = ["alembic/"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = [
+  "-q",
+  "--cov=app",
+  "--cov=scripts",
+  "--cov-branch",
+  "--cov-report=term-missing:skip-covered",
+  "--cov-report=xml:coverage.xml",
+  "--cov-fail-under=85",
+]
+
+[tool.coverage.run]
+relative_files = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = true

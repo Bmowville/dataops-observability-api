@@ -1,7 +1,9 @@
 FROM python:3.11-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    DATABASE_URL=sqlite:////data/dataops_observability.db \
+    RUN_MIGRATIONS_ON_STARTUP=true
 
 WORKDIR /app
 
@@ -13,9 +15,11 @@ COPY alembic.ini ./
 
 RUN python -m pip install --upgrade pip \
     && python -m pip install --no-cache-dir ".[postgres]" \
-    && adduser --disabled-password --gecos "" apiuser
+    && groupadd --gid 10001 apiuser \
+    && useradd --uid 10001 --gid apiuser --no-create-home --shell /usr/sbin/nologin apiuser \
+    && install -d -o apiuser -g apiuser -m 0750 /data
 
-USER apiuser
+USER 10001:10001
 
 EXPOSE 8000
 

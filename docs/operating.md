@@ -50,9 +50,13 @@ docker compose up --build -d
 4. Verify it is healthy:
 
 ```powershell
+Invoke-RestMethod "http://127.0.0.1:8000/live"
 Invoke-RestMethod "http://127.0.0.1:8000/health"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/metrics/summary"
 ```
+
+`/live` confirms that the API process can respond without touching the database. `/health` is
+the readiness check and succeeds only when the configured database is reachable.
 
 Open:
 
@@ -115,6 +119,9 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries?limit=20"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries/latest"
 ```
 
+Audit records and logs retain only the receiver origin. Credential-bearing user information,
+paths, queries, fragments, and raw exception text are intentionally excluded.
+
 ## Backups
 
 The Compose setup stores Postgres data in the `postgres_data` volume. Back up the database before upgrades:
@@ -144,9 +151,18 @@ For environments with stricter release controls, set `RUN_MIGRATIONS_ON_STARTUP=
 
 ## Production Notes
 
+- Set `ENVIRONMENT=production`; startup then requires at least one non-empty
+  `INGESTION_API_KEYS` value.
+- Managed Postgres URLs beginning with `postgres://` or `postgresql://` are normalized to the
+  SQLAlchemy psycopg 3 dialect. Keep the full value in the platform secret store.
 - Put the API behind TLS with a reverse proxy or platform ingress.
 - Set strong `INGESTION_API_KEYS` and rotate them with comma-separated old/new values during transitions.
 - Store real passwords and webhook secrets in a secret manager or deployment platform, not in source control.
 - Restrict Postgres network access to the API service.
-- Monitor `/health`, `/api/v1/metrics/prometheus`, and alert delivery failures.
+- Use `/live` for liveness and `/health` for database-aware readiness. Monitor
+  `/api/v1/metrics/prometheus` and alert delivery failures separately.
 - Keep regular Postgres backups before image upgrades or schema migrations.
+
+The GitHub container workflow publishes GHCR images with commit-addressable tags, an SBOM, and
+build provenance. CI enforces branch coverage, applies migrations to Postgres, and smoke-tests
+the image as its non-root runtime user before release.

@@ -33,6 +33,8 @@ SessionFactory = Callable[[], Session]
 
 logger = logging.getLogger(__name__)
 
+REDACTED_WEBHOOK_RECEIVER = "<redacted-webhook-receiver>"
+
 
 def get_configured_alert_webhook_urls(settings: Settings) -> tuple[str, ...]:
     return tuple(
@@ -211,6 +213,7 @@ def send_webhook_alert(
     shared_secret: str,
     timeout_seconds: float,
 ) -> tuple[AlertDeliveryStatus, int | None, str | None]:
+    receiver = sanitize_receiver(webhook_url)
     data = json.dumps(payload).encode("utf-8")
     headers = {
         "Accept": "application/json",
@@ -230,22 +233,41 @@ def send_webhook_alert(
         with urlopen(request, timeout=timeout_seconds) as response:
             return AlertDeliveryStatus.succeeded, response.getcode(), None
     except HTTPError as error:
-        logger.warning("Webhook alert delivery failed for %s: %s", webhook_url, error)
-        return AlertDeliveryStatus.failed, error.code, truncate_error(error)
+        logger.warning(
+            "Webhook alert delivery failed for %s with HTTP status %s",
+            receiver,
+            error.code,
+        )
+        return AlertDeliveryStatus.failed, error.code, safe_delivery_error(error)
     except (URLError, TimeoutError, OSError) as error:
-        logger.warning("Webhook alert delivery failed for %s: %s", webhook_url, error)
-        return AlertDeliveryStatus.failed, None, truncate_error(error)
+        logger.warning(
+            "Webhook alert delivery failed for %s (%s)",
+            receiver,
+            type(error).__name__,
+        )
+        return AlertDeliveryStatus.failed, None, safe_delivery_error(error)
 
 
 def sanitize_receiver(webhook_url: str) -> str:
-    parsed = urlsplit(webhook_url)
-    if not parsed.netloc:
-        return webhook_url[:500]
+    """Return only a webhook origin, never credentials or request-target secrets."""
+    try:
+        parsed = urlsplit(webhook_url)
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError:
+        return REDACTED_WEBHOOK_RECEIVER
 
-    host = parsed.netloc.rsplit("@", maxsplit=1)[-1]
-    path = parsed.path or "/"
-    return f"{parsed.scheme}://{host}{path}"[:500]
+    if not parsed.scheme or hostname is None:
+        return REDACTED_WEBHOOK_RECEIVER
+
+    if ":" in hostname:
+        hostname = f"[{hostname}]"
+    authority = hostname if port is None else f"{hostname}:{port}"
+    return f"{parsed.scheme.casefold()}://{authority}"[:500]
 
 
-def truncate_error(error: BaseException) -> str:
-    return str(error)[:500]
+def safe_delivery_error(error: BaseException) -> str:
+    """Keep persisted diagnostics useful without retaining provider URLs or secrets."""
+    if isinstance(error, HTTPError):
+        return f"Webhook returned HTTP {error.code}"
+    return f"{type(error).__name__}: webhook delivery failed"

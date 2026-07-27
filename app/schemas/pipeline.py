@@ -74,6 +74,12 @@ class HealthResponse(BaseModel):
     database: str
 
 
+class LivenessResponse(BaseModel):
+    status: str
+    app_name: str
+    environment: str
+
+
 class PipelineRunCreate(BaseModel):
     name: str = Field(min_length=3, max_length=120)
     source_system: str = Field(min_length=2, max_length=80)

@@ -1,6 +1,7 @@
 from functools import lru_cache
+from typing import Self
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -50,6 +51,28 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: object) -> object:
+        """Use SQLAlchemy's psycopg 3 dialect for provider-style Postgres URLs."""
+        if not isinstance(value, str):
+            return value
+
+        for scheme in ("postgres://", "postgresql://"):
+            if value.startswith(scheme):
+                return f"postgresql+psycopg://{value.removeprefix(scheme)}"
+        return value
+
+    @model_validator(mode="after")
+    def require_production_ingestion_key(self) -> Self:
+        if self.environment.strip().casefold() == "production" and not any(
+            key.strip() for key in self.ingestion_api_keys.split(",")
+        ):
+            raise ValueError(
+                "INGESTION_API_KEYS must be configured when ENVIRONMENT=production"
+            )
+        return self
 
 
 @lru_cache
