@@ -119,7 +119,7 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries?limit=20"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries/latest"
 ```
 
-Audit records and logs retain only the receiver origin. Credential-bearing user information,
+New audit records and logs retain only the receiver origin. Credential-bearing user information,
 paths, queries, fragments, and raw exception text are intentionally excluded.
 
 ## Backups
@@ -163,6 +163,7 @@ For environments with stricter release controls, set `RUN_MIGRATIONS_ON_STARTUP=
   `/api/v1/metrics/prometheus` and alert delivery failures separately.
 - Keep regular Postgres backups before image upgrades or schema migrations.
 
-The GitHub container workflow publishes GHCR images with commit-addressable tags, an SBOM, and
-build provenance. CI enforces branch coverage, applies migrations to Postgres, and smoke-tests
-the image as its non-root runtime user before release.
+The GitHub container workflow publishes GHCR images from protected-main commits with
+commit-addressable tags, an SBOM, and build provenance. Deploy by digest when registry-level
+immutability is required. CI enforces branch coverage, applies migrations to Postgres, and
+smoke-tests the image as its non-root runtime user before release.

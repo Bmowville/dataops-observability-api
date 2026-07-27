@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.services.webhook_alerts as webhook_alerts
+from app import __version__
 from app.core.config import Settings, get_settings
 from app.main import app
 from app.schemas.pipeline import AlertDeliveryStatus
@@ -217,6 +218,7 @@ def test_webhook_delivery_uses_original_url_but_logs_only_sanitized_receiver(
 
     def fail_delivery(request: Any, timeout: float) -> None:
         assert request.full_url == webhook_url
+        assert request.get_header("User-agent") == f"dataops-observability-api/{__version__}"
         assert timeout == 1.5
         raise URLError(f"connection refused for {webhook_url}")
 

@@ -11,6 +11,7 @@ from urllib.request import Request, urlopen
 from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 
+from app import __version__
 from app.core.config import Settings
 from app.db.session import SessionLocal
 from app.models.pipeline import PipelineRun, QualityCheck
@@ -18,7 +19,7 @@ from app.schemas.pipeline import AlertDeliveryStatus, PipelineRunStatus, Quality
 from app.services.alert_deliveries import create_alert_delivery
 
 WEBHOOK_SECRET_HEADER = "X-DataOps-Webhook-Secret"
-WEBHOOK_USER_AGENT = "dataops-observability-api/0.1"
+WEBHOOK_USER_AGENT = f"dataops-observability-api/{__version__}"
 ACTIONABLE_RUN_STATUSES = {
     PipelineRunStatus.failed.value,
     PipelineRunStatus.canceled.value,

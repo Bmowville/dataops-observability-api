@@ -42,7 +42,7 @@ See [docs/operating.md](docs/operating.md) for self-hosted Postgres operation, A
 - Enforced branch coverage, Postgres integration checks, and Docker health smoke tests
 - Ruff, strict mypy, GitHub Actions CI, Dependabot, and GitHub CodeQL default setup
 - Dockerfile and Compose setup for self-hosted Postgres service runs
-- GHCR publishing with immutable commit tags, an SBOM, and build provenance
+- GHCR publishing with commit-addressable SHA tags, an SBOM, and build provenance
 
 ## Domain
 
@@ -264,11 +264,11 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries?status=failed"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries/latest"
 ```
 
-Only the receiver origin is retained for delivery history and logs. User information, path segments, query values, fragments, and exception text that could contain provider credentials are not persisted.
+New delivery history and logs retain only the receiver origin. User information, path segments, query values, fragments, and exception text that could contain provider credentials are not persisted.
 
 ## Container Releases
 
-The container workflow builds on merges to `main`, semantic version tags, or a manual dispatch. It publishes lowercase GHCR image names with immutable commit tags, generates an SBOM, and attaches GitHub build provenance. Pull requests must first pass unit and coverage checks, a real Postgres migration and health check, and a non-root Docker smoke test.
+The container workflow builds only from commits reachable from protected `main`, whether triggered by a merge, semantic version tag, or manual dispatch. It publishes lowercase GHCR image names with commit-addressable SHA tags, generates an SBOM, and attaches GitHub build provenance. Pull requests must first pass unit and coverage checks, a real Postgres migration and health check, and a non-root Docker smoke test. Deploy by image digest when registry-level immutability is required.
 
 ## Notes
 
