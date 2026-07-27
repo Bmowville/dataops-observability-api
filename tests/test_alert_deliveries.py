@@ -55,11 +55,11 @@ def test_send_webhook_alerts_records_each_delivery_attempt(
     deliveries = db_session.scalars(select(AlertDelivery).order_by(AlertDelivery.id)).all()
     assert len(deliveries) == 2
     assert deliveries[0].event_type == "pipeline_run_failed"
-    assert deliveries[0].receiver == "https://alerts.example/dataops"
+    assert deliveries[0].receiver == "https://alerts.example"
     assert deliveries[0].status == "succeeded"
     assert deliveries[0].http_status_code == 202
     assert deliveries[0].error_message is None
-    assert deliveries[1].receiver == "https://backup.example/hooks/dataops"
+    assert deliveries[1].receiver == "https://backup.example"
     assert deliveries[1].status == "failed"
     assert deliveries[1].http_status_code == 503
     assert deliveries[1].error_message == "Service Unavailable"

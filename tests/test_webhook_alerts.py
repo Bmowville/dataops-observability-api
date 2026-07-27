@@ -1,10 +1,15 @@
-from typing import Any
+import logging
+from typing import Any, cast
+from urllib.error import URLError
 
+import pytest
 from fastapi.testclient import TestClient
 
 import app.services.webhook_alerts as webhook_alerts
+from app import __version__
 from app.core.config import Settings, get_settings
 from app.main import app
+from app.schemas.pipeline import AlertDeliveryStatus
 
 
 def override_alert_settings(**values: Any) -> None:
@@ -22,7 +27,7 @@ def create_running_run(client: TestClient) -> dict[str, Any]:
         },
     )
     assert response.status_code == 201
-    return response.json()
+    return cast(dict[str, Any], response.json())
 
 
 def test_failed_pipeline_run_sends_webhook_alert(
@@ -80,7 +85,7 @@ def test_failed_pipeline_run_sends_webhook_alert(
     assert payload["severity"] == "critical"
     assert payload["message"] == "Pipeline run daily_orders_load is failed."
     assert payload["pipeline_run"] == {
-        **payload["pipeline_run"],
+        **cast(dict[str, Any], payload["pipeline_run"]),
         "id": created["id"],
         "name": "daily_orders_load",
         "status": "failed",
@@ -131,7 +136,7 @@ def test_warning_quality_check_sends_webhook_alert(
     assert payload["severity"] == "medium"
     assert payload["message"] == "Quality check freshness_sla is warning for daily_orders_load."
     assert payload["quality_check"] == {
-        **payload["quality_check"],
+        **cast(dict[str, str], payload["quality_check"]),
         "check_name": "freshness_sla",
         "status": "warning",
         "severity": "medium",
@@ -200,3 +205,63 @@ def test_failed_pipeline_run_without_configured_webhooks_does_not_deliver(
     )
 
     assert response.status_code == 200
+
+
+def test_webhook_delivery_uses_original_url_but_logs_only_sanitized_receiver(
+    monkeypatch: Any,
+    caplog: Any,
+) -> None:
+    webhook_url = (
+        "https://webhook-user:webhook-password@hooks.example:8443/"
+        "services/team-id/secret-token?signature=query-secret#fragment-secret"
+    )
+
+    def fail_delivery(request: Any, timeout: float) -> None:
+        assert request.full_url == webhook_url
+        assert request.get_header("User-agent") == f"dataops-observability-api/{__version__}"
+        assert timeout == 1.5
+        raise URLError(f"connection refused for {webhook_url}")
+
+    monkeypatch.setattr(webhook_alerts, "urlopen", fail_delivery)
+
+    with caplog.at_level(logging.WARNING, logger=webhook_alerts.__name__):
+        status, http_status, error_message = webhook_alerts.send_webhook_alert(
+            webhook_url,
+            {"event_type": "pipeline_run_failed"},
+            "shared-secret",
+            1.5,
+        )
+
+    assert status == AlertDeliveryStatus.failed
+    assert http_status is None
+    assert error_message == "URLError: webhook delivery failed"
+    assert caplog.messages == [
+        "Webhook alert delivery failed for https://hooks.example:8443 (URLError)"
+    ]
+    for secret_value in (
+        "webhook-user",
+        "webhook-password",
+        "team-id",
+        "secret-token",
+        "query-secret",
+        "fragment-secret",
+    ):
+        assert secret_value not in error_message
+
+
+@pytest.mark.parametrize(
+    ("webhook_url", "expected"),
+    [
+        (
+            "https://user:password@hooks.example/path/secret?token=query#fragment",
+            "https://hooks.example",
+        ),
+        ("https://hooks.example:9443/a/b/c", "https://hooks.example:9443"),
+        ("not-a-url/secret?token=query", "<redacted-webhook-receiver>"),
+    ],
+)
+def test_sanitize_receiver_exposes_only_the_origin(
+    webhook_url: str,
+    expected: str,
+) -> None:
+    assert webhook_alerts.sanitize_receiver(webhook_url) == expected

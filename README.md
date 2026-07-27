@@ -1,5 +1,9 @@
 # DataOps Observability API
 
+[![CI](https://github.com/Bmowville/dataops-observability-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Bmowville/dataops-observability-api/actions/workflows/ci.yml)
+![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A FastAPI service for tracking data pipeline runs, quality checks, and operational status.
 
 The service keeps operational metadata for data workflows in a small API surface with typed routes, database migrations, test coverage, Docker support, and CI quality gates.
@@ -35,8 +39,10 @@ See [docs/operating.md](docs/operating.md) for self-hosted Postgres operation, A
 - Service-layer functions separated from route handlers
 - Health checks with database connectivity
 - Pytest tests using dependency overrides and isolated SQLite state
-- Ruff, mypy, and GitHub Actions CI
+- Enforced branch coverage, Postgres integration checks, and Docker health smoke tests
+- Ruff, strict mypy, GitHub Actions CI, Dependabot, and GitHub CodeQL default setup
 - Dockerfile and Compose setup for self-hosted Postgres service runs
+- GHCR publishing with commit-addressable SHA tags, an SBOM, and build provenance
 
 ## Domain
 
@@ -63,6 +69,7 @@ Open:
 
 - Dashboard: http://127.0.0.1:8000/dashboard
 - API docs: http://127.0.0.1:8000/docs
+- Liveness check: http://127.0.0.1:8000/live
 - Health check: http://127.0.0.1:8000/health
 
 The demo setup runs migrations and reseeds a realistic operating state with registered pipeline ownership, a successful pipeline, a failed historical run, a stale active run, quality checks, recommended actions, and recent alert delivery attempts.
@@ -153,7 +160,8 @@ For operational setup, backup, restore, and upgrade commands, see [docs/operatin
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/health` | Service and database health |
+| GET | `/live` | Process liveness without a database dependency |
+| GET | `/health` | Readiness check with database connectivity |
 | POST | `/api/v1/pipelines` | Register a pipeline owner, cadence, stale threshold, and runbook |
 | GET | `/api/v1/pipelines?enabled=true` | List registered pipelines, optionally filtered by enabled status |
 | GET | `/api/v1/pipelines/{name}` | Read one registered pipeline definition |
@@ -199,8 +207,8 @@ Settings are loaded from environment variables.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `APP_NAME` | `DataOps Observability API` | FastAPI application name |
-| `ENVIRONMENT` | `local` | Environment label returned by health checks |
-| `DATABASE_URL` | `sqlite:///./dataops_observability.db` | SQLAlchemy database URL |
+| `ENVIRONMENT` | `local` | Environment label returned by health checks. `production` requires at least one ingestion API key. |
+| `DATABASE_URL` | `sqlite:///./dataops_observability.db` | SQLAlchemy database URL. Plain `postgres://` and `postgresql://` provider URLs are normalized for psycopg 3. |
 | `API_PREFIX` | `/api/v1` | Versioned API prefix |
 | `RUN_MIGRATIONS_ON_STARTUP` | `false` | Run Alembic migrations before starting the API process. Compose enables this for the API container. |
 | `SERVER_HOST` | `0.0.0.0` | Host interface used by `scripts/start_api.py`. |
@@ -224,6 +232,8 @@ When `INGESTION_API_KEYS` is set, these write endpoints require `X-DataOps-API-K
 - `POST /api/v1/pipeline-runs/{run_id}/quality-checks`
 
 Use different keys during rotation by setting a comma-separated value such as `INGESTION_API_KEYS=old-key,new-key`. Store real keys in your deployment secret manager, CI secrets, or local `.env` file rather than committing them.
+
+The application refuses to start with `ENVIRONMENT=production` when no ingestion key is configured. This prevents an accidentally public deployment from exposing anonymous write endpoints.
 
 ## Webhook Alerts
 
@@ -253,6 +263,12 @@ Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries?limit=20"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries?status=failed"
 Invoke-RestMethod "http://127.0.0.1:8000/api/v1/alerts/deliveries/latest"
 ```
+
+New delivery history and logs retain only the receiver origin. User information, path segments, query values, fragments, and exception text that could contain provider credentials are not persisted.
+
+## Container Releases
+
+The container workflow builds only from commits reachable from protected `main`, whether triggered by a merge, semantic version tag, or manual dispatch. It publishes lowercase GHCR image names with commit-addressable SHA tags, generates an SBOM, and attaches GitHub build provenance. Pull requests must first pass unit and coverage checks, a real Postgres migration and health check, and a non-root Docker smoke test. Deploy by image digest when registry-level immutability is required.
 
 ## Notes
 
