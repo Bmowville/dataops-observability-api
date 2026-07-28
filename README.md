@@ -272,7 +272,7 @@ The container workflow builds only from commits reachable from protected `main`,
 
 ## Azure Deployment
 
-Reviewed Bicep defines a low-cost Azure Container Apps deployment backed by Neon PostgreSQL. It pins the public API and migration job to the same immutable container digest, scales the API from zero to one replica, adds a resource-group-filtered `$5` monthly cost alert, and gates each release on a successful database migration before the API is updated. Infrastructure compilation is part of CI.
+Reviewed Bicep defines an Azure Container Apps deployment backed by Neon PostgreSQL. It pins the public API and migration job to the same immutable container digest, scales the API from zero to one replica, and gates each release on a successful database migration before the API is updated. Infrastructure compilation is part of CI.
 
 Live service: [Dashboard](https://ca-dataops-api-prod.wonderfultree-ff9c3d86.eastus2.azurecontainerapps.io/dashboard) | [API documentation](https://ca-dataops-api-prod.wonderfultree-ff9c3d86.eastus2.azurecontainerapps.io/docs) | [Health](https://ca-dataops-api-prod.wonderfultree-ff9c3d86.eastus2.azurecontainerapps.io/health)
 

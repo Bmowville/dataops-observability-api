@@ -15,15 +15,6 @@ param migrationJobName string = 'caj-dataops-migrate-prod'
 @description('Public Container App name.')
 param apiAppName string = 'ca-dataops-api-prod'
 
-@description('Monthly Azure Cost Management budget name.')
-param budgetName string = 'budget-dataops-portfolio-5-usd'
-
-@description('First day of the current budget month as an ISO 8601 timestamp, for example 2026-08-01T00:00:00Z. Keep this value stable on redeployments.')
-param budgetStartDate string
-
-@description('Email address that receives Azure budget notifications. Supply at deployment time; do not commit a personal address.')
-param budgetContactEmail string
-
 @description('Production Neon pooled PostgreSQL connection URL used by the API.')
 @secure()
 param neonPooledDatabaseUrl string
@@ -50,80 +41,12 @@ param tags object = {
   project: 'dataops-observability'
   environment: 'prod'
   'managed-by': 'bicep'
-  'cost-owner': 'portfolio'
 }
 
 resource rg 'Microsoft.Resources/resourceGroups@2025-04-01' = {
   name: resourceGroupName
   location: location
   tags: tags
-}
-
-resource monthlyBudget 'Microsoft.Consumption/budgets@2024-08-01' = {
-  name: budgetName
-  properties: {
-    amount: 5
-    category: 'Cost'
-    timeGrain: 'Monthly'
-    timePeriod: {
-      startDate: budgetStartDate
-    }
-    filter: {
-      dimensions: {
-        name: 'ResourceGroupName'
-        operator: 'In'
-        values: [
-          rg.name
-        ]
-      }
-    }
-    notifications: {
-      Actual50Percent: {
-        enabled: true
-        operator: 'GreaterThanOrEqualTo'
-        threshold: 50
-        thresholdType: 'Actual'
-        contactEmails: [
-          budgetContactEmail
-        ]
-        contactGroups: []
-        contactRoles: []
-      }
-      Actual80Percent: {
-        enabled: true
-        operator: 'GreaterThanOrEqualTo'
-        threshold: 80
-        thresholdType: 'Actual'
-        contactEmails: [
-          budgetContactEmail
-        ]
-        contactGroups: []
-        contactRoles: []
-      }
-      Actual100Percent: {
-        enabled: true
-        operator: 'GreaterThanOrEqualTo'
-        threshold: 100
-        thresholdType: 'Actual'
-        contactEmails: [
-          budgetContactEmail
-        ]
-        contactGroups: []
-        contactRoles: []
-      }
-      Forecasted100Percent: {
-        enabled: true
-        operator: 'GreaterThanOrEqualTo'
-        threshold: 100
-        thresholdType: 'Forecasted'
-        contactEmails: [
-          budgetContactEmail
-        ]
-        contactGroups: []
-        contactRoles: []
-      }
-    }
-  }
 }
 
 module containerAppsPlatform './modules/container-apps-platform.bicep' = {
@@ -157,7 +80,6 @@ module api './modules/api.bicep' = if (deployApi) {
 
 output resourceGroupId string = rg.id
 output deployedResourceGroupName string = rg.name
-output budgetId string = monthlyBudget.id
 output environmentId string = containerAppsPlatform.outputs.environmentId
 output migrationJobId string = containerAppsPlatform.outputs.migrationJobId
 output deployedMigrationJobName string = containerAppsPlatform.outputs.migrationJobName

@@ -66,13 +66,11 @@ jobs:
 
       - name: Compile infrastructure and parameters
         env:
-          AZURE_BUDGET_CONTACT_EMAIL: validation@example.invalid
           NEON_POOLED_DATABASE_URL: validation-pooled-url
           NEON_DIRECT_DATABASE_URL: validation-direct-url
           DATAOPS_INGESTION_API_KEY: validation-only-not-a-secret
           AZURE_DEPLOY_API: "false"
         run: |
-          export AZURE_BUDGET_START_DATE="$(date -u +%Y-%m-01T00:00:00Z)"
           az bicep build --file infra/main.bicep --stdout >/dev/null
           az bicep build-params --file infra/main.bicepparam --stdout >/dev/null
 
