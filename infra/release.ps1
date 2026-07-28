@@ -60,7 +60,6 @@ function Protect-AzureCliDiagnostics {
 
     $redacted = $Text
     foreach ($secretVariable in @(
-        "AZURE_BUDGET_CONTACT_EMAIL",
         "NEON_POOLED_DATABASE_URL",
         "NEON_DIRECT_DATABASE_URL",
         "DATAOPS_INGESTION_API_KEY"
@@ -221,8 +220,6 @@ function Get-RequiredEnvironmentVariable {
 
 function Invoke-SyntheticParameterBuild {
     $syntheticValues = [ordered]@{
-        AZURE_BUDGET_START_DATE = "2026-07-01T00:00:00Z"
-        AZURE_BUDGET_CONTACT_EMAIL = "validation@example.invalid"
         NEON_POOLED_DATABASE_URL = "validation-pooled-url"
         NEON_DIRECT_DATABASE_URL = "validation-direct-url"
         DATAOPS_INGESTION_API_KEY = "validation-only-not-a-secret"
@@ -318,35 +315,6 @@ function Assert-DatabaseConnectionPair {
     }
 }
 
-function Assert-BudgetInputs {
-    param(
-        [Parameter(Mandatory)]
-        [string]$ContactEmail,
-
-        [Parameter(Mandatory)]
-        [string]$StartDate
-    )
-
-    try {
-        $null = [System.Net.Mail.MailAddress]$ContactEmail
-    }
-    catch {
-        throw "AZURE_BUDGET_CONTACT_EMAIL must be a valid email address."
-    }
-
-    $parsedStartDate = [DateTimeOffset]::MinValue
-    $parsed = [DateTimeOffset]::TryParse(
-        $StartDate,
-        [Globalization.CultureInfo]::InvariantCulture,
-        [Globalization.DateTimeStyles]::AssumeUniversal,
-        [ref]$parsedStartDate
-    )
-
-    if (-not $parsed -or $parsedStartDate.Day -ne 1 -or $parsedStartDate.TimeOfDay -ne [TimeSpan]::Zero) {
-        throw "AZURE_BUDGET_START_DATE must be midnight UTC on the first day of a month."
-    }
-}
-
 function Get-IacFileFingerprints {
     $relativeFiles = @(
         "main.bicep",
@@ -379,10 +347,7 @@ function Get-DeploymentInputFingerprints {
         [string]$DirectDatabaseUrl,
 
         [Parameter(Mandatory)]
-        [string]$IngestionApiKey,
-
-        [Parameter(Mandatory)]
-        [string]$BudgetContactEmail
+        [string]$IngestionApiKey
     )
 
     try {
@@ -413,7 +378,6 @@ function Get-DeploymentInputFingerprints {
     }
 
     return [ordered]@{
-        AZURE_BUDGET_CONTACT_EMAIL = & $fingerprint "AZURE_BUDGET_CONTACT_EMAIL" $BudgetContactEmail
         NEON_POOLED_DATABASE_URL = & $fingerprint "NEON_POOLED_DATABASE_URL" $PooledDatabaseUrl
         NEON_DIRECT_DATABASE_URL = & $fingerprint "NEON_DIRECT_DATABASE_URL" $DirectDatabaseUrl
         DATAOPS_INGESTION_API_KEY = & $fingerprint "DATAOPS_INGESTION_API_KEY" $IngestionApiKey
@@ -427,12 +391,6 @@ function Save-WhatIfManifest {
 
         [Parameter(Mandatory)]
         [string]$TargetDeploymentPrefix,
-
-        [Parameter(Mandatory)]
-        [string]$BudgetStartDate,
-
-        [Parameter(Mandatory)]
-        [string]$BudgetContactEmail,
 
         [Parameter(Mandatory)]
         [string]$PooledDatabaseUrl,
@@ -453,11 +411,10 @@ function Save-WhatIfManifest {
     [Security.Cryptography.RandomNumberGenerator]::Fill($saltBytes)
     $fingerprintSalt = [Convert]::ToBase64String($saltBytes)
     $manifest = [ordered]@{
-        version = 2
+        version = 3
         subscriptionId = $TargetSubscriptionId
         deploymentPrefix = $TargetDeploymentPrefix
         location = $location
-        budgetStartDate = $BudgetStartDate
         deployApi = $true
         createdAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
         secretFingerprintSalt = $fingerprintSalt
@@ -465,8 +422,7 @@ function Save-WhatIfManifest {
             -Salt $fingerprintSalt `
             -PooledDatabaseUrl $PooledDatabaseUrl `
             -DirectDatabaseUrl $DirectDatabaseUrl `
-            -IngestionApiKey $IngestionApiKey `
-            -BudgetContactEmail $BudgetContactEmail
+            -IngestionApiKey $IngestionApiKey
         whatIf = [ordered]@{
             file = Split-Path -Leaf $previewOutputPath
             resultFormat = "FullResourcePayloads"
@@ -486,12 +442,6 @@ function Assert-CurrentWhatIfManifest {
         [string]$TargetDeploymentPrefix,
 
         [Parameter(Mandatory)]
-        [string]$BudgetStartDate,
-
-        [Parameter(Mandatory)]
-        [string]$BudgetContactEmail,
-
-        [Parameter(Mandatory)]
         [string]$PooledDatabaseUrl,
 
         [Parameter(Mandatory)]
@@ -507,7 +457,7 @@ function Assert-CurrentWhatIfManifest {
 
     try {
         $manifest = Get-Content -Raw -LiteralPath $previewManifestPath | ConvertFrom-Json
-        if ($manifest.version -ne 2) {
+        if ($manifest.version -ne 3) {
             throw "unsupported manifest version"
         }
         $createdAt = [DateTimeOffset]::Parse($manifest.createdAtUtc, [Globalization.CultureInfo]::InvariantCulture)
@@ -526,7 +476,6 @@ function Assert-CurrentWhatIfManifest {
         $manifest.subscriptionId -ne $TargetSubscriptionId -or
         $manifest.deploymentPrefix -cne $TargetDeploymentPrefix -or
         $manifest.location -cne $location -or
-        $manifest.budgetStartDate -cne $BudgetStartDate -or
         $manifest.deployApi -ne $true
     ) {
         throw "The reviewed what-if target no longer matches the requested deployment."
@@ -536,10 +485,8 @@ function Assert-CurrentWhatIfManifest {
         -Salt $manifest.secretFingerprintSalt `
         -PooledDatabaseUrl $PooledDatabaseUrl `
         -DirectDatabaseUrl $DirectDatabaseUrl `
-        -IngestionApiKey $IngestionApiKey `
-        -BudgetContactEmail $BudgetContactEmail
+        -IngestionApiKey $IngestionApiKey
     foreach ($inputVariable in @(
-        "AZURE_BUDGET_CONTACT_EMAIL",
         "NEON_POOLED_DATABASE_URL",
         "NEON_DIRECT_DATABASE_URL",
         "DATAOPS_INGESTION_API_KEY"
@@ -1344,11 +1291,8 @@ if (-not [Guid]::TryParse($SubscriptionId, [ref]$parsedSubscriptionId)) {
 $pooledDatabaseUrl = Get-RequiredEnvironmentVariable "NEON_POOLED_DATABASE_URL"
 $directDatabaseUrl = Get-RequiredEnvironmentVariable "NEON_DIRECT_DATABASE_URL"
 $ingestionApiKey = Get-RequiredEnvironmentVariable "DATAOPS_INGESTION_API_KEY"
-$budgetContactEmail = Get-RequiredEnvironmentVariable "AZURE_BUDGET_CONTACT_EMAIL"
-$budgetStartDate = Get-RequiredEnvironmentVariable "AZURE_BUDGET_START_DATE"
 
 Assert-DatabaseConnectionPair -PooledUrl $pooledDatabaseUrl -DirectUrl $directDatabaseUrl
-Assert-BudgetInputs -ContactEmail $budgetContactEmail -StartDate $budgetStartDate
 
 if ($ingestionApiKey.Length -lt 24) {
     throw "DATAOPS_INGESTION_API_KEY must contain at least 24 characters."
@@ -1367,7 +1311,7 @@ if ([string]$accountContext.id -ne $SubscriptionId) {
 
 Write-Host "Azure target: $($accountContext.name) | subscription $($accountContext.id) | tenant $($accountContext.tenantId)"
 
-foreach ($providerNamespace in @("Microsoft.App", "Microsoft.Consumption")) {
+foreach ($providerNamespace in @("Microsoft.App")) {
     $providerState = ((Invoke-AzureCli -Arguments @(
         "provider", "show",
         "--namespace", $providerNamespace,
@@ -1416,8 +1360,6 @@ try {
         Save-WhatIfManifest `
             -TargetSubscriptionId $SubscriptionId `
             -TargetDeploymentPrefix $DeploymentPrefix `
-            -BudgetStartDate $budgetStartDate `
-            -BudgetContactEmail $budgetContactEmail `
             -PooledDatabaseUrl $pooledDatabaseUrl `
             -DirectDatabaseUrl $directDatabaseUrl `
             -IngestionApiKey $ingestionApiKey
@@ -1428,8 +1370,6 @@ try {
     Assert-CurrentWhatIfManifest `
         -TargetSubscriptionId $SubscriptionId `
         -TargetDeploymentPrefix $DeploymentPrefix `
-        -BudgetStartDate $budgetStartDate `
-        -BudgetContactEmail $budgetContactEmail `
         -PooledDatabaseUrl $pooledDatabaseUrl `
         -DirectDatabaseUrl $directDatabaseUrl `
         -IngestionApiKey $ingestionApiKey
