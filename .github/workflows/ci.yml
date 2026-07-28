@@ -51,6 +51,35 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  infrastructure-quality:
+    name: Bicep compilation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Bicep CLI
+        run: az bicep install --version v0.45.15
+
+      - name: Compile infrastructure and parameters
+        env:
+          AZURE_BUDGET_CONTACT_EMAIL: validation@example.invalid
+          NEON_POOLED_DATABASE_URL: validation-pooled-url
+          NEON_DIRECT_DATABASE_URL: validation-direct-url
+          DATAOPS_INGESTION_API_KEY: validation-only-not-a-secret
+          AZURE_DEPLOY_API: "false"
+        run: |
+          export AZURE_BUDGET_START_DATE="$(date -u +%Y-%m-01T00:00:00Z)"
+          az bicep build --file infra/main.bicep --stdout >/dev/null
+          az bicep build-params --file infra/main.bicepparam --stdout >/dev/null
+
+      - name: Validate guarded release wrapper
+        shell: pwsh
+        run: ./infra/release.ps1 -Mode Build
+
   postgres-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -162,6 +191,7 @@ jobs:
     if: always()
     needs:
       - unit-quality
+      - infrastructure-quality
       - postgres-integration
       - docker-smoke
     runs-on: ubuntu-latest
@@ -169,6 +199,7 @@ jobs:
     permissions: {}
     env:
       UNIT_QUALITY_RESULT: ${{ needs.unit-quality.result }}
+      INFRASTRUCTURE_QUALITY_RESULT: ${{ needs.infrastructure-quality.result }}
       POSTGRES_INTEGRATION_RESULT: ${{ needs.postgres-integration.result }}
       DOCKER_SMOKE_RESULT: ${{ needs.docker-smoke.result }}
     steps:
@@ -176,5 +207,6 @@ jobs:
         shell: bash
         run: |
           test "$UNIT_QUALITY_RESULT" = "success"
+          test "$INFRASTRUCTURE_QUALITY_RESULT" = "success"
           test "$POSTGRES_INTEGRATION_RESULT" = "success"
           test "$DOCKER_SMOKE_RESULT" = "success"
