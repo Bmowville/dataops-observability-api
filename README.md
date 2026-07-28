@@ -270,6 +270,14 @@ New delivery history and logs retain only the receiver origin. User information,
 
 The container workflow builds only from commits reachable from protected `main`, whether triggered by a merge, semantic version tag, or manual dispatch. It publishes lowercase GHCR image names with commit-addressable SHA tags, generates an SBOM, and attaches GitHub build provenance. Pull requests must first pass unit and coverage checks, a real Postgres migration and health check, and a non-root Docker smoke test. Deploy by image digest when registry-level immutability is required.
 
+## Azure Deployment
+
+Reviewed Bicep defines a low-cost Azure Container Apps deployment backed by Neon PostgreSQL. It pins the public API and migration job to the same immutable container digest, scales the API from zero to one replica, adds a resource-group-filtered `$5` monthly cost alert, and gates each release on a successful database migration before the API is updated. Infrastructure compilation is part of CI.
+
+Live service: [Dashboard](https://ca-dataops-api-prod.wonderfultree-ff9c3d86.eastus2.azurecontainerapps.io/dashboard) | [API documentation](https://ca-dataops-api-prod.wonderfultree-ff9c3d86.eastus2.azurecontainerapps.io/docs) | [Health](https://ca-dataops-api-prod.wonderfultree-ff9c3d86.eastus2.azurecontainerapps.io/health)
+
+The production release was deployed and smoke-tested on July 28, 2026. Public reads remain open for portfolio inspection, while all write endpoints require the production ingestion key.
+
 ## Notes
 
 SQLite is the default for local Python development. Docker Compose provides the recommended self-hosted Postgres path, including database health checks and migration-aware API startup.
