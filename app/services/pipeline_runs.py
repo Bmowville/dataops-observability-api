@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.pipeline import PipelineDefinition, PipelineRun, QualityCheck
@@ -82,7 +82,7 @@ def list_pipeline_runs(
     status: PipelineRunStatus | None = None,
     limit: int = 100,
 ) -> list[PipelineRun]:
-    statement: Select[tuple[PipelineRun]] = (
+    statement = (
         select(PipelineRun)
         .options(selectinload(PipelineRun.quality_checks))
         .order_by(PipelineRun.created_at.desc())
