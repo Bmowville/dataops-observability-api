@@ -1,3 +1,4 @@
+import os
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -28,4 +29,5 @@ def health(db: Annotated[Session, Depends(get_db)]) -> HealthResponse:
         app_name=settings.app_name,
         environment=settings.environment,
         database="ok",
+        revision=os.environ.get("VERCEL_GIT_COMMIT_SHA") or None,
     )
