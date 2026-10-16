@@ -280,6 +280,14 @@ The hosted service runs on Vercel's Python 3.12 runtime with durable Neon Postgr
 
 Configure `DATABASE_URL`, `INGESTION_API_KEYS`, `ENVIRONMENT=production`, and `PUBLIC_BASE_URL` as protected hosting environment variables. Run Alembic migrations separately with a database-owner connection before deploying a validated commit with `vercel deploy --prod`. Function startup never runs schema migrations. Development files and local environment settings are excluded from the deployment bundle.
 
+### Automated releases and live checks
+
+For a push to `main`, CI must pass unit tests, coverage, linting, typing, PostgreSQL integration, infrastructure validation, and the Docker smoke test before its release job fast-forwards `production` to the tested commit. Vercel's native Git integration publishes only that branch. Preview branches do not receive production credentials, and no hosting-account token is stored in GitHub.
+
+The release job waits for Vercel's deployment status, confirms the live `/health` response reports the tested source `revision`, and checks database readiness, dashboard HTML, interactive API documentation, and anonymous write rejection without creating records. The `Live service checks` workflow repeats these checks every six hours and supports manual dispatch. Scheduling is best-effort; these endpoint checks do not replace browser or authenticated ingestion tests.
+
+Database migrations remain separate and must be applied with an owner connection before a schema-changing release. A failed live check reports a failure rather than rolling back data. Use a previous known-good Vercel deployment for code rollback and recheck readiness.
+
 ## Azure Deployment
 
 Reviewed Bicep defines an Azure Container Apps deployment backed by Neon PostgreSQL. It pins the public API and migration job to the same immutable container digest, scales the API from zero to one replica, and gates each release on a successful database migration before the API is updated. Infrastructure compilation is part of CI.

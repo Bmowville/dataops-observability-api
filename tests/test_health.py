@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 from app.db.session import get_db
@@ -28,3 +30,8 @@ def test_health_returns_service_status(client: TestClient) -> None:
     assert payload["status"] == "ok"
     assert payload["database"] == "ok"
     assert payload["app_name"] == "DataOps Observability API"
+
+
+def test_health_reports_hosted_source_revision(client: TestClient) -> None:
+    with patch.dict("os.environ", {"VERCEL_GIT_COMMIT_SHA": "a" * 40}):
+        assert client.get("/health").json()["revision"] == "a" * 40

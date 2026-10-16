@@ -72,6 +72,7 @@ class HealthResponse(BaseModel):
     app_name: str
     environment: str
     database: str
+    revision: str | None = None
 
 
 class LivenessResponse(BaseModel):
