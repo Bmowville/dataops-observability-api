@@ -6,6 +6,10 @@
 
 A FastAPI service for tracking data pipeline runs, quality checks, and operational status.
 
+[Live dashboard](https://dataops-observability-api.vercel.app/dashboard) | [Interactive API docs](https://dataops-observability-api.vercel.app/docs) | [Service health](https://dataops-observability-api.vercel.app/health)
+
+The hosted dashboard is public and read-only. Ingestion writes require an API key; visitors do not need a hosting account.
+
 The service keeps operational metadata for data workflows in a small API surface with typed routes, database migrations, test coverage, Docker support, and CI quality gates.
 
 It is shaped as a lightweight operations layer for teams that need more than scattered logs but do not need a full observability platform. Pipelines can report run status and quality checks into the API, then operators can use the dashboard or metrics endpoints to see what needs attention first.
@@ -270,11 +274,17 @@ New delivery history and logs retain only the receiver origin. User information,
 
 The container workflow builds only from commits reachable from protected `main`, whether triggered by a merge, semantic version tag, or manual dispatch. It publishes lowercase GHCR image names with commit-addressable SHA tags, generates an SBOM, and attaches GitHub build provenance. Pull requests must first pass unit and coverage checks, a real Postgres migration and health check, and a non-root Docker smoke test. Deploy by image digest when registry-level immutability is required.
 
+## Serverless Deployment
+
+The hosted service runs on Vercel's Python 3.12 runtime with durable Neon PostgreSQL storage. The `app.vercel:app` entrypoint refuses SQLite, while the normal application entrypoint keeps SQLite available for local development. Runtime database permissions allow application reads and writes without schema creation privileges.
+
+Configure `DATABASE_URL`, `INGESTION_API_KEYS`, `ENVIRONMENT=production`, and `PUBLIC_BASE_URL` as protected hosting environment variables. Run Alembic migrations separately with a database-owner connection before deploying a validated commit with `vercel deploy --prod`. Function startup never runs schema migrations. Development files and local environment settings are excluded from the deployment bundle.
+
 ## Azure Deployment
 
 Reviewed Bicep defines an Azure Container Apps deployment backed by Neon PostgreSQL. It pins the public API and migration job to the same immutable container digest, scales the API from zero to one replica, and gates each release on a successful database migration before the API is updated. Infrastructure compilation is part of CI.
 
-Hosted access is temporarily unavailable. [Run locally](#quick-start), [use Docker Compose](#docker), or browse the [API reference](#api-surface).
+The current hosted service uses [Vercel and Neon](#serverless-deployment). The Azure infrastructure remains available as an alternative deployment target. [Local setup](#quick-start) and [Docker Compose](#docker) are also supported.
 
 The Azure release was deployed and smoke-tested on July 28, 2026. When configured for production, dashboard reads remain public and write endpoints require an ingestion key.
 
