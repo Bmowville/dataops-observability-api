@@ -274,9 +274,9 @@ The container workflow builds only from commits reachable from protected `main`,
 
 Reviewed Bicep defines an Azure Container Apps deployment backed by Neon PostgreSQL. It pins the public API and migration job to the same immutable container digest, scales the API from zero to one replica, and gates each release on a successful database migration before the API is updated. Infrastructure compilation is part of CI.
 
-Live service: [Dashboard](https://ca-dataops-api-prod.wonderfultree-ff9c3d86.eastus2.azurecontainerapps.io/dashboard) | [API documentation](https://ca-dataops-api-prod.wonderfultree-ff9c3d86.eastus2.azurecontainerapps.io/docs) | [Health](https://ca-dataops-api-prod.wonderfultree-ff9c3d86.eastus2.azurecontainerapps.io/health)
+Hosted access is temporarily unavailable. [Run locally](#quick-start), [use Docker Compose](#docker), or browse the [API reference](#api-surface).
 
-The production release was deployed and smoke-tested on July 28, 2026. Public reads remain open for portfolio inspection, while all write endpoints require the production ingestion key.
+The Azure release was deployed and smoke-tested on July 28, 2026. When configured for production, dashboard reads remain public and write endpoints require an ingestion key.
 
 ## Notes
 
